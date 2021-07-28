@@ -1,0 +1,554 @@
+---
+title: "NetPriori"
+author: "Ariel Salgado"
+date: "27 de Julio de 2021"
+output:
+  html_document:
+    df_print: paged
+    toc: yes
+  html_notebook:
+    theme: lumen
+    toc: yes
+    toc_float: yes
+subtitle: "SC4PPL"
+---
+
+# Propuesta motivacional
+
+El modelo propuesto en este notebook sirve para transformar una red de relaciones en una distribución de probabilidad _a priori_ que vincule a las personas (los nodos de la red). Como problema _ad hoc_ podemos pensar en una reunión a concretarse entre un grupo de amigues. La imagen es que existe una red que vincula la decisión de asistir al evento de las personas. En términos de DVI, podemos interpretar estas probabilidades como las de encontrar a las personas de interés en el _evento_ (que puede ser un naufragio, una fosa común u otro).
+
+# Formulación matemática
+
+## Introducción
+
+Supongamos que tenemos un grupo de 3 personas que pueden ser encontradas o no en el evento. Siendo que cada una individualmente puede estar o no en el evento, en principio tendríamos $2^3=8$ posibles escenarios, que dan lugar a las posibles combinaciones de presencia en el lugar. En verdad, necesitamos 1 parámetro menos debido a que todos juntos suma 1. Cada uno de estos escenarios tiene una probabilidad $\theta_{rsq}$, donde cada subindice refiere a una persona, y por ejemplo $\theta_{123}$ indica que las tres personas se encuentran en el evento, y $\theta_{1 \bar 2 3}$ indica que sólo las personas 1 y 3 están en el evento (es decir, la barra sobre el número indica ausencia). En principio entonces, para el problema de 3 personas, necesitamos definir 7 valores para representar la distribución de probabilidad. El gran problema con esto es que el número de probabilidades a definir crece exponencialmente con la cantidad de personas. Por otro lado, si tenemos una red que conecta a las personas, esto nos sugiere que en realidad sólo nos interesan ciertas combinaciones. Por ejemplo, si nuestra red para estas tres personas consiste de un link conectando a las personas 1 y 2 y ninguna conectando a la 3:
+
+```{r}
+require(igraph)
+make_empty_graph(n=3,directed=FALSE) %>% add_edges(edges = c(1,2)) %>% plot()
+```
+
+Esto nos sugiere que las personas 1 y 2 estan correlacionadas, mientras que la 3 debería ser independiente de estas dos. Esto equivaldría a decir que en realidad $\theta_{123} = \theta_{12} \theta_{3}$. Notemos como esto nos deja con menos parámetros necesarios que antes: $2^2-1=3$ para las personas 1 y 2 ($\theta_{12},\theta_{1 \bar 2}, \theta_{\bar 1 2}$, $\theta_{\bar 1 \bar 2} = 1 - \theta_{12}-\theta_{1 \bar 2}-\theta_{\bar 1 2}$), y 1 más para la persona 3 ($\theta_3$, $\theta_{\bar 3} = 1 -\theta_3). Esto es una mejoría excelente (4 vs 8 parámetros). La pregunta es cómo podemos extender esta idea para una red.
+
+Por otro lado, también esta la pregunta: ¿Cómo elegimos los valores de los $\theta_{rs}$ para representar lo que nos interesa? Empecemos por esta segunda pregunta.
+
+## Estudiando un único link
+
+Exploremos cómo podemos representar la información que nos da una conexión única en la red.
+```{r}
+require(igraph)
+make_empty_graph(n=2,directed=FALSE) %>% add_edges(edges = c(1,2)) %>% plot()
+```
+
+La imagen mental con la que estamos trabajando en esta situación es que tenemos dos personas conectadas por un link. Este link lo que representa es que hay muchas más chances de encontrar a estas dos personas juntas que separadas. Con eso dicho, partimos de que tenemos que definir tres valores $\theta_{12},\theta_{1 \bar 2}, \theta_{\bar 1 2}$ para definir la distribución de probabilidad de estas dos personas (recordar que $\theta_{\bar 1 \bar 2}$ se obtiene a partir de que la suma total debe ser 1). Nuestro objetivo no es definir exactamente estos valores, sino dar una distribución de probabilidad que represente los posibles valores que pueden tomar. Por esta razón, una distribución de Dirichlet es lo más razonable para describirlos.
+
+Una distribución de Dirichlet tiene la pinta:
+
+$$
+f(\theta_{12},\theta_{1 \bar 2},\theta_{\bar 1 2}|\kappa_{12},\kappa_{1 \bar 2},\kappa_{\bar 1 2},\kappa_{\bar 1 \bar 2}) \propto \theta_{12}^{\kappa_{12}-1} \theta_{1 \bar 2}^{\kappa_{1\bar 2}-1} \theta_{\bar 1 2}^{\kappa_{\bar 1 2}-1} (1-\theta_{12}-\theta_{1 \bar 2}-\theta_{\bar 1 2})^{\kappa_{\bar 1 \bar 2}-1}
+$$
+Es decir, que la distribución queda definida especificando los valores de 4 parámetros $\kappa_{rs}$. Para lo que sigue es útil tener presente también que
+
+$$
+E[\theta_{rs}] = \frac{\kappa_{rs}}{\kappa}
+$$
+$$
+\kappa = \kappa_{12}+\kappa_{1 \bar 2}+\kappa_{\bar 1 2}+\kappa_{\bar 1 \bar 2}
+$$
+Además, al considerar la suma de dos de los $\theta_{rs}$ (es decir agregar sobre un subconjunto de posibilidades) lo que obtenemos es una distribución de Dirichlet, con los valores de $\kappa_{rs}$ sumados. De esta forma, si consideramos $\theta_1 = \theta_{12} + \theta_{1 \bar 2}$, la probabilidad marginal de encontrar a la persona 1, y $\theta_2 = \theta_{1 2} + \theta_{\bar 1 2}$ la probabilidad de encontrar a la persona 2 en el evento, tenemos que:
+
+$$
+\theta_1 \sim Beta(\kappa_{12} + \kappa_{1 \bar 2},\kappa_{\bar1 2} + \kappa_{\bar 1 \bar 2})
+$$
+
+$$
+\theta_2 \sim Beta(\kappa_{12} + \kappa_{\bar 1  2},\kappa_{1 \bar  2} + \kappa_{\bar 1 \bar 2})
+$$
+(recordar que la distribución Beta es una Dirichlet con sólo dos parámetros).
+
+
+Dado que lo que queremos representar mediante los $\theta_{rs}$ es que lo más probable es encontrarlos juntos, una posibilidad es decir que
+
+$$
+\gamma = \frac{E[\theta_{12} + \theta_{\bar 1 \bar 2}]}{E[\theta_{1\bar 2} + \theta_{ 1 \bar 2}]} = \frac{\kappa_{12} + \kappa_{\bar 1 \bar 2}}{\kappa_{\bar1 2} + \kappa_{ 1 \bar 2}}
+$$
+Especificar el parámetro $\gamma$ nos permite decir cuantas veces más creible consideramos que es encontrar a ambas personas juntas (es decir que ambas estén o ambas no estén) en comparación a que una sí esté y la otra no. 
+
+Por otro lado, considerando el hecho de que las distribuciones de $\theta_1$ y $\theta_2$ son Betas, querríamos que estas no provean información ni afirmativa ni negativa sobre las posibilidades de encontrar a las personas en el evento (esta información debería provenir de otra fuente que no sea la red). Por lo tanto obtenemos las tres ecuaciones:
+
+$$
+\begin{eqnarray}
+\kappa_{12} - \gamma \kappa_{1\bar2}-\gamma \kappa_{\bar 1 2} + \kappa_{\bar 1 \bar 2} = 0\\
+\kappa_{12} + \kappa_{1 \bar 2} - \kappa_{\bar 1 2} -\kappa_{\bar 1 \bar 2} = 0 \\
+\kappa_{12} - \kappa_{1 \bar  2} + \kappa_{\bar 12}  -\kappa_{\bar 1 \bar 2} = 0
+\end{eqnarray}
+$$
+Despejando estas ecuaciones llegamos a que, para que $E[\theta_1] = E[\theta_2]  = 0.5$ necesitamos  $\kappa_{1 \bar 2} = \kappa_{\bar 1 2}$, y $\kappa_{12} = \kappa_{\bar 1 \bar 2}$, y que $\kappa_{1 \bar 2} = \frac{1}{\gamma} \kappa_{12}$. Si usamos como parámetros de control de la distribución a $\gamma$ y a $\kappa$, tendremos que $\kappa = \frac{2}{\gamma} \kappa_{12} + 2 \kappa_{12} = 2 \frac{\gamma+1}{\gamma } \kappa_{12}$ y por lo tanto
+
+$$
+\begin{eqnarray}
+\kappa_{12} = \kappa_{\bar 1 \bar 2} = \frac{\gamma}{2(\gamma +1 )} \kappa \\
+\kappa_{1 \bar 2} = \kappa_{\bar 1  2} = \frac{1}{2(\gamma +1 )} \kappa \\
+\end{eqnarray}
+$$
+Vemos que bajo estas condiciones, la esperanza $\theta_{rs} = \kappa_{rs}/\kappa$ sólo depende de $\gamma$, variando entre $0$ y $+\infty$ para $12,\bar 1 \bar 2$, y a la inversa para $1 \bar 2,\bar 1 2$. Con estos valores, tenemos
+
+$$
+\begin{eqnarray}
+\kappa_1 = \kappa_{12} + \kappa_{1 \bar 2}  \frac{\gamma+1}{2(\gamma +1 )} \kappa = \frac{1}{2} \kappa \\
+\kappa_2 = \kappa_1 = \frac{1}{2} \kappa \\
+\end{eqnarray}
+$$
+El parámetro $\kappa$ comanda la varianza del sistema. Por ejemplo, para los $\theta_1,\theta_2$, su varianza está dada por
+
+$$
+V[\theta_1] = V[\theta_2] = \frac{1}{4(\kappa+1)}
+$$
+
+Entonces, para definir nuestro modelo del link necesitamos especificar dos parámetros: $\gamma$ y $\kappa$, que dictan la esperanza y la varianza del sistema.
+
+Veamos un poco qué pinta tienen estas distribuciones:
+
+```{r}
+require(MCMCpack)
+require(ggplot2)
+require(patchwork)
+gamma=10
+kappa=20
+kappas = c(gamma,1,1,gamma)*kappa/(2*(gamma+1))
+muestras = rdirichlet(n=1e5,kappas)
+
+df = data.frame(muestras)
+colnames(df) = c('t12','t1n2','tn12','tn1n2')
+gg12 = ggplot(data=df,aes(x=t12,y=..density..)) + geom_histogram()
+gg1n2 = ggplot(data=df,aes(x=t1n2,y=..density..)) + geom_histogram()
+gg12_1n2 = ggplot(data=df,aes(x=t12,y=t1n2)) + geom_bin2d()
+gg12_n1n2 = ggplot(data=df,aes(x=t12,y=tn1n2)) + geom_bin2d()
+gg1n2_n12 = ggplot(data=df,aes(x=tn12,y=t1n2)) + geom_bin2d()
+gg1 = ggplot(data=df,aes(x=t12+t1n2,y=..density..)) + geom_histogram()
+gg2 = ggplot(data=df,aes(x=t12+tn12,y=..density..)) + geom_histogram()
+gg1_2 = ggplot(data=df,aes(x=t12+t1n2,y=t12+tn12)) + geom_bin2d()
+
+print(gg12)
+print(gg1n2)
+print(gg12_1n2)
+print(gg12_n1n2)
+print(gg1n2_n12)
+print(gg1)
+print(gg2)
+print(gg1_2)
+```
+
+## Considerando varios links
+
+### Dos links separados
+
+```{r}
+require(igraph)
+make_empty_graph(n=4,directed=FALSE) %>% add_edges(edges = c(1,2,3,4)) %>% plot()
+```
+
+
+Si bien en sí no es muy interesante, es útil para motivar el paso siguiente considerar qué podríamos decir de dos links separados. Dado que estos dos links no conectan nodos en común, la densidad conjunta sería simplemente el producto de las densidades.
+
+Si $f_{12}$ es la densidad asociada a considerar el link de las personas $1$ y $2$, y $f_{34}$ lo mismo para $3$ y $4$, entonces tendríamos que
+
+$$
+f_{12,34} = f_{12} \cdot f_{34}
+$$
+
+### Un nodo con dos links
+
+```{r}
+require(igraph)
+make_empty_graph(n=3,directed=FALSE) %>% add_edges(edges = c(1,2,1,3)) %>% plot()
+```
+
+Si queremos considerar un nodo con tres links, en principio deberíamos volver a la situación inicial: escribir una distribución de probabilidad para parámetros $\theta_{rsq}$, con $2^3-1$ parámetros a especificar. Esto nos mantiene la dificultad de tener que especificar valores para muchos de esos parámetros, cosa que en principio no es para nada claro como hacer. Nuestra información de la red, por otro lado, nos permite pensar de a pares en cada link. Volviendo sobre el ejemplo de dos links separados, aquí lo que podríamos pensar es que nuestra red equivale a dos links separados, a los cuales "pegamos", indicando que el nodo $1$ es el mismo que el nodo $4$. Si pensamos que cada link está representando parte de la información global de la red, podríamos interpretar que:
+
+$$
+\begin{eqnarray}
+\theta_{12} = \theta_{123} + \theta_{12 \bar 3} \\
+\theta_{13} = \theta_{123} + \theta_{1 \bar 2 3} \\
+...
+\end{eqnarray}
+$$
+Es decir, la distribución que armamos para los links se ocupa de mirar las distribuciones marginales de la distribución global. Por lo tanto
+
+$$
+\begin{align}
+\theta_1 &= \theta_{1 2} + \theta_{1 \bar 2} \\
+&= \theta_{1 2 3} + \theta_{1 2 \bar 3}  + \theta_{1 \bar 2 3} + \theta_{1 \bar 2 \bar 3} \\
+&= \theta_{1 2 3} + \theta_{1 \bar 2 3} + \theta_{1 2 \bar 3}   + \theta_{1 \bar 2 \bar 3} \\
+\theta_1 &= \theta_{1 3} + \theta_{1 \bar 3} \\
+\theta_{1 2} + \theta_{1 \bar 2} &= \theta_{1 3} + \theta_{1 \bar 3} \\
+
+\end{align}
+$$
+
+Es decir que el hecho de que ambos links ($l_{12}$ y $l_{13}$) conecten ambos con la persona $1$ impone una relación entre los valores que pueden tomar sus valores de $\theta_{rs}$, en forma de la ecuación 
+
+$$
+\theta_{1 2} + \theta_{1 \bar 2} - \theta_{1 3} - \theta_{1 \bar 3} =0
+$$
+
+Esta relación impone un vínculo entre las dos distribuciones marginales, y resta una dimensión al problema: pasamos de tener 6 parámetros a definir, a tener 5. Matemáticamente, esta relación de vínculo puede representarse en la densidad escribiendola con una delta de Dirac, que asigne valor cero a los valores fuera del vínculo.
+
+$$
+f_{12,13} = f_{12} \cdot f_{13} \cdot \delta(\theta_{1 2} + \theta_{1 \bar 2} - \theta_{1 3} - \theta_{1 \bar 3})
+$$
+La delta de Dirac vale infinito sobre el vínculo, lo que permite que marginalicemos sobre el mismo reduciendo la dimensión del problema.
+
+Si bien esto formalmente es muy simpático, desde una perspectiva práctica no nos permite avanzar mucho. Por otro lado, las ecuaciones con las que estamos trabajando son lineales. Eso nos permite encontrar una forma de escribir los valores de los $\theta$ de forma que cumplan automáticamente el vínculo.
+Para esto, consideremos ahora un vector $z$ que describe el estado completo del sistema:
+
+$$
+z = (\theta_{12},\theta_{1 \bar 2},\theta_{\bar 1 2},\theta_{13},\theta_{1 \bar 3},\theta_{\bar 1 3})
+$$
+Si nuestra condición de vínculo está representada por una matriz $A$ tal que $Az=0$, tenemos que $A=(1,1,0,1,1,0)$. Los vectores $\tilde z$ que cumplen con la condición de vínculo son aquellos que están en el núcleo de $A$. Usando MASS podemos calcular el núcleo fácilmente.
+
+```{r}
+require(MASS)
+A= c(1,1,0,1,1,0)
+fractions(Null(A))
+```
+Las 5 columnas de esta matriz representan los 5 vectores ortogonales $v_1,\dots,v_5$ tales que cualquier combinación lineal de ellos cumple la condición impuesta. Entonces, eligiendo 5 valores $\eta_1,\dots,\eta_5$ tenemos
+
+$$
+z = \sum^5_{i=1} \eta_i v_i
+$$
+A su vez, las filas de la matriz de los $v_i$ nos dice los coeficientes que necesitamos para escribir los $\theta_{rs}$ en términos de los $\eta_i$. De esta forma, nuestra densidad final termina teniendo la pinta
+
+$$
+f_{12,13} = f_{12}(z_{12}(\eta)) \cdot f_{13}(z_{13}(\eta))
+$$
+donde $\eta = (\eta_1,\dots,\eta_5)$ y $z_{rs}=(\theta_{rs},\theta_{r\bar s},\theta_{\bar r s})$. Esta propuesta ya nos permite obtener muestras de la distribución como en el caso anterior. 
+
+Aún así, existe una propuesta alternativa, que es especialmente útil cuando queremos considerar correcciones sólo a los estimandos de las esperanzas. Este método se denomina _método de la proyección_ y consiste en reemplazar cada muestra o estimación con su proyección en el subespacio que cumple con la condición de vínculo. Matemáticamente, si partimos de nuestra muestra $z$ y queremos una muestra corregida $\tilde z$ que cumpla la condición de vínculo, usaremos:
+
+$$
+\tilde z = \sum^5_{i=1} <z,v_i> v_i
+$$
+donde $<z,v_i> = \sum^6_{j=1} (v_{i})_j z_j$. Esto es especialmente útil si lo que queremos es corregir estimaciones de la esperanza, ya que la proyección es una operación lineal, y por lo tanto la esperanza de la proyección es la proyección de la esperanza ($E[\tilde z] = \tilde{ E[z]}$). El único problema del método del proyector es que si nuestras muestras están muy alejadas de la distribución real el resultado puede ser muy ruidoso.
+
+
+
+
+#### Ejemplo usando los $\eta$
+
+En este ejemplito vamos a usar el mini repositorio de funciones armado hasta el momento:
+
+```{r}
+source('repo.R')
+```
+
+Preparamos la red que vamos a usar:
+
+```{r}
+g = make_empty_graph(n=3,directed=FALSE)
+g = add_edges(g,c(1,2,1,3))
+plot(g)
+X = as_adjacency_matrix(g,sparse = FALSE)
+```
+
+Armamos la matriz de constraints, y el proyector.
+
+```{r}
+Z = generate_state_vector(X)
+A = generate_constraint_matrix(X)
+P = generate_proyector(A)
+print('El vector Z')
+print(Z)
+print('La matriz de constraints')
+print(A)
+print('El proyector')
+print(fractions(P))
+```
+
+Definimos los parámetros para las distribuciones de cada link
+
+```{r}
+gamma = 10
+kappa_sum = 22
+kappas = generate_kappas(Z,gamma = gamma,K=kappa_sum)
+print(kappas)
+params = list('kappas'=kappas,'K'=P)
+```
+
+Y ahora lo bueno, definimos los parámetros para la simulación:
+
+```{r}
+z0 = kappas[c(1:3,5:7)]/kappa_sum
+initial = t(P)%*%z0
+density = density_eta
+samples0 = sampling(density = density,initial=initial,params=params,full.result = FALSE,scale=6e-2)
+```
+
+
+Y con esto cargado, podemos explorar un poco los resultados:
+
+```{r}
+df0 = as.data.frame(t(P%*%t(samples0)))
+colnames(df0) = paste('t',Z,sep='')
+ggL0 = make_ggmagic(df0)
+print(ggL0$gL1)
+print(ggL0$gL2)
+print(ggL0$gL3)
+print(ggL0$gL4)
+```
+
+#### Ejemplo con los proyectores
+
+Ahora probemos el mismo procedimiento pero para usando las proyecciones.
+
+```{r}
+source('repo.R')
+```
+
+Preparamos la red que vamos a usar:
+
+```{r}
+g = make_empty_graph(n=3,directed=FALSE)
+g = add_edges(g,c(1,2,1,3))
+plot(g)
+X = as_adjacency_matrix(g,sparse = FALSE)
+```
+
+Armamos la matriz de constraints, y el proyector.
+
+```{r}
+Z = generate_state_vector(X)
+A = generate_constraint_matrix(X)
+P = generate_proyector(A)
+print('El vector Z')
+print(Z)
+print('La matriz de constraints')
+print(A)
+print('El proyector')
+print(fractions(P))
+```
+
+Definimos los parámetros para las distribuciones de cada link
+
+```{r}
+gamma = 10
+kappa_sum = 22
+kappas = generate_kappas(Z,gamma = gamma,K=kappa_sum)
+print(kappas)
+params = list('kappas'=kappas,'K'=P)
+```
+
+Y ahora lo bueno, definimos los parámetros para la simulación:
+
+```{r}
+initial = kappas[c(1:3,5:7)]/kappa_sum
+density = density_comb
+samples1 = sampling(density = density,initial=initial,params=params,full.result = FALSE,scale=6e-2)
+```
+
+En este caso necesitamos proyectar los resultados muestreados
+
+```{r}
+samples1P = proyect(samples1,P)
+```
+
+Exploremos un poco estos resultados
+
+```{r}
+df1 = as.data.frame(samples1P)
+colnames(df1) = paste('t',Z,sep='')
+ggL1 = make_ggmagic(df1)
+print(ggL1$gL1)
+print(ggL1$gL2)
+print(ggL1$gL3)
+print(ggL1$gL4)
+```
+
+##### Comentario sobre las dimensiones y el escalamiento
+
+Si consideramos que en una red tenemos $m$ links y $p$ ecuaciones de vínculo, entonces tendremos $3m-p$ parámetros en nuestro sistema: $3$ $\theta_{rs}$ por cada link, y $p$ condiciones de vínculo que los conecten. Si comparamos esto con los $2^n$ parámetros que tendríamos si f
+
+
+## Las mediciones
+
+Este modelo que construimos propone una forma de transformar una red en una distribución que conecte a las personas. Bajo esta imagen, lo que suponemos que sería una medición típica $M_i$ sería sobre las variables $\theta_i$. Por ejemplo, nuestra medición podría ser 
+
+$$
+g(\theta_1|M_1) \propto \theta_1^{\alpha_{1}-1} (1-\theta_1)^{\alpha_{\bar 1}-1}
+$$
+donde la función $g$ lo que representa es la verosimilitud de cada $\theta$ en base a una medición. 
+
+Esto equivaldría a que (basandose en la información de la medición) 
+
+$$
+\begin{align}
+E[\theta_1|M_1] &= \frac{\alpha_1}{\alpha_1 + \alpha_{\bar 1}} \\
+V[\theta_1|M_1] &= \frac{\alpha_1 \alpha_{\bar 1}}{(\alpha_1 + \alpha_{\bar 1})^2} \frac{1}{\alpha_1 + \alpha_{\bar 1} +1}
+\end{align}
+$$
+Esto equivale en nuestras variables a decir
+
+$$
+g(z|M_1) \propto (\theta_{12} + \theta_{1 \bar 2})^{\alpha_{1}-1} (1-\theta_{12} - \theta_{1 \bar 2})^{\alpha_{\bar 1}-1}
+$$
+
+
+¿Cómo se da esta medición? Esto aún sería un punto a discutir. Así como está escrito este modelo, corresponde a pensar que medimos $\alpha_1 -1$ casos favorables y $\alpha_{\bar 1}-1$ casos desfavorables. En este contexto es dudoso aún qué representarían estos casos favorables y desfavorables. Aún así, también podemos decir que lo que mire el observador es un valor medio más una varianza, y representamos eso a través de esta distribución.
+
+Con esto dicho, nuestra distribución a posteriori será
+
+$$
+h(z) = g(z)\cdot f(z)
+$$
+
+
+### Ejemplito usando los $\eta$
+Veamos un ejemplito simple con esto. Consideremos un sólo link (dos personas) y recibimos información de la persona $1$:
+
+```{r}
+gamma = 10
+kappa_sum = 22
+Z= c('12','1n2','n12')
+kappas = generate_kappas(Z,K=kappa_sum)
+H = c(1,1,0)
+alfas = c(49,1)
+params = list('H'=H,'alfas'=alfas,'kappas'=kappas)
+
+initial = kappas[1:3]/sum(kappas)
+density = density_comb
+samples = sampling(density = density,initial=initial,params=params,full.result = FALSE,scale=6e-2)
+
+initial = colMeans(samples)
+density = density_measure
+samplesL = sampling(density = density,initial=initial,params=params,full.result = FALSE,scale=6e-2)
+
+
+initial = colMeans(samples)
+density = density_posteriori
+samplesP = sampling(density = density,initial=initial,params=params,full.result = FALSE,scale=6e-2)
+
+df0 = as.data.frame(samples)
+dfL = as.data.frame(samplesL)
+dfP = as.data.frame(samplesP)
+colnames(df0) = c('t12','t1n2','tn12')
+colnames(dfL) = c('t12','t1n2','tn12')
+colnames(dfP) = c('t12','t1n2','tn12')
+
+g0 = make_ggmagic(df0)
+gL = make_ggmagic(dfL,'Medicion')
+gP = make_ggmagic(dfP,'Post')
+
+g0L = make_ggmagic2(df0,dfL,gtitle2 = 'Medicion')
+g0P = make_ggmagic2(df0,dfP)
+```
+
+Primer set de gráficos:
+```{r}
+print(g0$gL1)
+print(gL$gL1)
+print(gP$gL1)
+```
+
+Segundo set de gráficos:
+```{r}
+print(g0L$F)
+print(g0P$F)
+
+print(g0L$G)
+print(g0P$G)
+
+```
+
+### Ejemplo con dos links
+
+Repetimos el mismo modelo que presentamos antes y le agregamos la misma medición. Es decir, medimos que va a estar la persona $1$
+
+```{r}
+g = make_empty_graph(n=3,directed=FALSE)
+g = add_edges(g,c(1,2,1,3))
+plot(g)
+X = as_adjacency_matrix(g,sparse = FALSE)
+
+Z = generate_state_vector(X)
+A = generate_constraint_matrix(X)
+P = generate_proyector(A)
+gamma = 2
+K = 4
+kappas = generate_kappas(Z,gamma = gamma,K=K)
+H = c(1,1,0,0,0,0)
+alfas = c(49,1)
+params = list('H'=H,'alfas'=alfas,'kappas'=kappas,'K'=P)
+
+
+z0 = kappas[c(1:3,5:7)]/K
+initial = t(P)%*%z0
+density = density_eta
+samples0 = sampling(density = density,initial=initial,params=params,full.result = FALSE,scale=6e-2)
+
+initial = colMeans(samples0)
+density = density_posteriori_eta
+samplesP = sampling(density = density,initial=initial,params=params,full.result = FALSE,scale=6e-2)
+
+initial = colMeans(samples0)
+density = density_measure_eta
+samplesL = sampling(density = density,initial=initial,params=params,full.result = FALSE,scale=6e-2)
+
+df0 = as.data.frame(t(P%*%t(samples0)))
+dfL = as.data.frame(t(P%*%t(samplesL)))
+dfP = as.data.frame(t(P%*%t(samplesP)))
+
+colnames(df0) = paste('t',Z,sep='')
+colnames(dfL) = paste('t',Z,sep='')
+colnames(dfP) = paste('t',Z,sep='')
+```
+
+Armamos los gráficos
+```{r}
+ggL0 = make_ggmagic(df0)
+ggLL = make_ggmagic(dfL,gtitle = 'Medición')
+ggLP = make_ggmagic(dfP,gtitle = 'Post')
+ggL0L = make_ggmagic2(df0, dfL,gtitle2 = 'Medicion')
+ggL0P = make_ggmagic2(df0, dfP)
+```
+
+
+Primer set de gráficos
+```{r}
+ggL0$gL1
+ggLL$gL1
+ggLP$gL1
+```
+
+Segundo set de gráficos
+```{r}
+ggL0$gL2
+ggLL$gL2
+ggLP$gL2
+```
+
+Tercer set de gráficos
+
+```{r}
+ggL0$gL3
+ggLL$gL3
+ggLP$gL3
+```
+
+Cuarto set de gráficos
+
+```{r}
+print(ggL0P$A)
+print(ggL0P$B)
+print(ggL0P$C)
+print(ggL0P$D)
+print(ggL0P$E)
+
+```
+
+Quinto set de gráficos
+
+```{r}
+print(ggL0P$F)
+print(ggL0P$G)
+print(ggL0P$H)
+```
