@@ -10,52 +10,126 @@ output:
     theme: lumen
     toc: yes
     toc_float: yes
-subtitle: "SC4PPL"
+subtitle: "CS4PPL"
 ---
 
 # Propuesta motivacional
 
-El modelo propuesto en este notebook sirve para transformar una red de relaciones en una distribución de probabilidad _a priori_ que vincule a las personas (los nodos de la red). Como problema _ad hoc_ podemos pensar en una reunión a concretarse entre un grupo de amigues. La imagen es que existe una red que vincula la decisión de asistir al evento de las personas. En términos de DVI, podemos interpretar estas probabilidades como las de encontrar a las personas de interés en el _evento_ (que puede ser un naufragio, una fosa común u otro).
+El modelo propuesto en este notebook sirve para transformar una red de relaciones en una distribución de probabilidad _a priori_ que vincule a las personas (los nodos de la red). Como problema _ad hoc_ podemos pensar en una reunión a concretarse entre un grupo de amigues. La imagen es que existe una red que vincula la decisión de asistir al evento de las personas. En términos de DVI, podemos interpretar estas probabilidades como las de encontrar a las personas de interés en el _evento_ (que puede ser un naufragio, una fosa común u otro). En general, podemos decir que el modelo aplica a la inferencia de quienes en un grupo de contactos optarán por una entre dos opciones.
 
 # Formulación matemática
 
 ## Introducción
 
-Supongamos que tenemos un grupo de 3 personas que pueden ser encontradas o no en el evento. Siendo que cada una individualmente puede estar o no en el evento, en principio tendríamos $2^3=8$ posibles escenarios, que dan lugar a las posibles combinaciones de presencia en el lugar. En verdad, necesitamos 1 parámetro menos debido a que todos juntos suma 1. Cada uno de estos escenarios tiene una probabilidad $\theta_{rsq}$, donde cada subindice refiere a una persona, y por ejemplo $\theta_{123}$ indica que las tres personas se encuentran en el evento, y $\theta_{1 \bar 2 3}$ indica que sólo las personas 1 y 3 están en el evento (es decir, la barra sobre el número indica ausencia). En principio entonces, para el problema de 3 personas, necesitamos definir 7 valores para representar la distribución de probabilidad. El gran problema con esto es que el número de probabilidades a definir crece exponencialmente con la cantidad de personas. Por otro lado, si tenemos una red que conecta a las personas, esto nos sugiere que en realidad sólo nos interesan ciertas combinaciones. Por ejemplo, si nuestra red para estas tres personas consiste de un link conectando a las personas 1 y 2 y ninguna conectando a la 3:
+### Álgebra de escenarios
+
+En lo que describiremos a continuación, trabajaremos con posibles escenarios y sus probabilidades. Bajo el riesgo de abusar levemente de la notación, asociaremos el símbolo $1$ a la sentencia _la persona 1 está en el evento_, y el síbolo $\bar 1$ a la negación de la sentencia anterior, es decir: _la persona 1 no está en el evento_. En general, para la persona $r$ usaremos la notación $r$ y $\bar r$ para indicar si está o no en el evento. Notese que cada una de estas sentencias es dicotómica, por lo que $r+\bar r$ siempre será verdad (la persona está ó no está en el evento). Al considerar una persona más, nuestro universo de opciones duplica en tamaño. Si pensamos en 2 personas, tendremos los escenarios posibles: 
+
+* $12$ (ambas están en el evento)
+* $1 \bar 2$ (sólo la 1 está en el evento)
+* $\bar 1 2$ (sólo la 2 está en el evento)
+* $\bar 1 \bar 2$ (ninguna está en el evento)
+
+Si pensamos en N personas, la cantidad de escenarios posibles será $2^N$. Nuevamente, usando un poco de lógica proposicional, observemos que $\bar1 2 + \bar 1 \bar 2$ (la persona 1 no está en el evento y la persona 2 sí está el evento ó la persona 1  nó está en el evento y la 2 tampoco) es, en términos de _veracidad_, equivalente a $1$, ya que $ \bar 1 2 + \bar 1 \bar 2 = \bar 1 (2 + \bar 2)$ y dado que la segunda sentencia es siempre verdad, esta sentencia es identica a $\bar 1$ (usando álgebra de Boole podemos decir que $2 + \bar 2=1$). Esto será relevante cuando nos movamos al terreno de las probabilidades.
+
+Cuando pensamos la probabilidad de cada escenario posible, podemos identificar cada escenario como la realización de una distribución multinomial, donde los parámetros que definen la distribución son las probabilidades de cada escenario (y sólo se saca una realización, el escenario observado). Entonces, manteniendo nuestra ejemplo de dos personas, tendríamos las probabilidades $\theta_{12}$ asociada al escenario $12$, $\theta_{1 \bar 2}$ asociada al escenario $1 \bar 2$, $\theta_{\bar 1 2}$ para $\bar 1 2$ y $\theta_{\bar 1 \bar 2}$ para $\bar 1 \bar 2$. Sin embargo, estos parámetros no son independientes, al igual que los valores de verdad de los escenarios. Dado que 
+
+$$
+12 + 1 \bar 2 + \bar 1 2 + \bar 1 \bar 2 = \text{TRUE}
+$$
+ya que necesariamente uno de los escenarios debe ser el correcto, también tenemos que 
+
+$$
+\theta_{12} + \theta_{ 1 \bar 2} + \theta_{\bar 1 2} + \theta_{\bar 1 \bar 2} = 1
+$$
+Es decir que una de las probabilidades puede ser hallada en función de las otras. Más aún, la probabilidad de que la persona 1 participe del evento (sentencia que escribimos como $1$) la podemos calcular como 
+
+$$
+\begin{align}
+P(1) &= P(1(2+\bar 2)) = P(12 + 1 \bar 2) \\&= P(12) + P(1 \bar 2) = \theta_{12} + \theta_{1 \bar 2} \\ &= \theta_{1}
+\end{align}
+$$
+Donde en el último paso definimos $\theta_1=P(1)$ y lo vinculamos con los otros $\theta$.
+
+Consideremos ahora tres problemas separados.
+
+* Sí sólo tuviesemos una persona en solitario, nuestra distribución de probabilidades estaría dada por $\theta_1$ y $\theta_{\bar 1} = 1 -\theta_1$
+
+* Si tuvieramos dos personas ya vimos que nuestra distribución de probabilidades queda definida por $\theta_{12}$, $\theta_{1 \bar 2}$, $\theta_{\bar 1 2}$ y $\theta_{\bar 1 \bar 2} = 1- (\theta_{12} + \theta_{1 \bar 2}+\theta_{\bar 1 2})$. Sin embargo, si agregamos la suposición adicional de que ambos son independientes tendríamos que $P(12)=P(1)P(2)=\theta_1 \theta_2$ y entonces nuestro número de parámetros se reduce a 2.
+
+* Si tuvieramos tres personas, pero la tercera es independiente de las otras dos, nuestro problema matemático se partiría en dos: uno que habla de las personas 1 y 2, y que requeriría especificar una distribución $\theta_{12},\theta_{1 \bar 2},...$ y otro para la persona 3 que requeriría especifica $\theta_3$. Luego las probabilidades se escribirían por ejemplo como $P(1 \bar 2 \bar 3) = P(1 \bar 2) P(\bar 3) = \theta_{1 \bar 2} (1- \theta_3)$.
+
+### La red
+
+Lo presentado hasta aquí nos permite formalizar distintos escenarios que conecten uno o varios grupos de personas. Sin embargo, nuestro objetivo es construir un modelo que nos permita convertir información de una red en información sobre la forma en la que debemos elegir los parámetros que la representen. Veamos algunos ejemplos:
 
 ```{r}
 require(igraph)
-make_empty_graph(n=3,directed=FALSE) %>% add_edges(edges = c(1,2)) %>% plot()
+par(mfrow=c(1,3))
+make_empty_graph(n=3,directed=FALSE) %>% plot()
+make_empty_graph(n=3,directed=FALSE) %>% add_edges(edges=c(1,2,1,3,2,3))%>% plot()
+make_empty_graph(n=3,directed=FALSE) %>% add_edges(edges=c(1,2,1,3))%>% plot()
 ```
 
-Esto nos sugiere que las personas 1 y 2 estan correlacionadas, mientras que la 3 debería ser independiente de estas dos. Esto equivaldría a decir que en realidad $\theta_{123} = \theta_{12} \theta_{3}$. Notemos como esto nos deja con menos parámetros necesarios que antes: $2^2-1=3$ para las personas 1 y 2 ($\theta_{12},\theta_{1 \bar 2}, \theta_{\bar 1 2}$, $\theta_{\bar 1 \bar 2} = 1 - \theta_{12}-\theta_{1 \bar 2}-\theta_{\bar 1 2}$), y 1 más para la persona 3 ($\theta_3$, $\theta_{\bar 3} = 1 -\theta_3). Esto es una mejoría excelente (4 vs 8 parámetros). La pregunta es cómo podemos extender esta idea para una red.
+* La red de la izquierda corresponde a una situación en la cual no hay relación entre ninguno de los nodos. Entonces, la distribución de probabilidad apropiada sería una en la que todos los nodos son independientes: $P(r)=\theta_r$, y $P(123) = \theta_1 \theta_2 \theta_3$.
 
-Por otro lado, también esta la pregunta: ¿Cómo elegimos los valores de los $\theta_{rs}$ para representar lo que nos interesa? Empecemos por esta segunda pregunta.
+* Las redes del centro y de la derecha require un poco más de cuidado. 
 
-## Estudiando un único link
+- La red del centro tiene dos interpretaciones posibles. Una sería pensar que al estar todos conectados entre todos, con lo cual nuestra distribución sería la conjunta completa $(\theta_{123},\dots,\theta_{\bar 1 \bar 2 \bar 3})$. Aún así, podemos simplificar esto bajo ciertos supuestos, que veremos más adelante.
 
-Exploremos cómo podemos representar la información que nos da una conexión única en la red.
+- La red de la derecha, por el contrario, vincula a los tres nodos, pero no de forma simétrica. Mientras que la persona 2 no está conectada a la 3 directamente, ambas se conectan con la 1. Esto nos sugiere que considerar directamente la distribución conjunta completa podría ser excesivo.
+
+La conclusión que extraemos de estos tres ejemplos es:
+
+* Cuando las personas están desconectadas _completamente_ (no existen caminos entre ellas), tiene sentido pensarlas como _independientes_.
+
+* Cuando hay conexiones entre las personas, parece sensato más que pensar en el grupo completo directamente, pensar las correlaciones de a pares. Esto tiene sentido porque bajo la apariencia de la red las conexiones entre las personas siempre son de a pares. Pensandolo _condicionalmente_, lo que estaríamos diciendo es que para estudiar $P(2|3)$ en una red como la del gráfico de la derecha, tendríamos que pensar en $P(2|1)$ y en $P(1|3)$, siendo: $P(2|3) = P(21|3) + P(2 \bar 1|3) = P(2 | 13) P(1|3) + P(2|\bar1 3)P(\bar 1 |3) = P(2|1)P(1|3) + P(2|\bar 1)P(\bar 1|3)$. Es decir, condicionando bajo $1$, $3$ es irrelevante para la probabilidad de $2$. 
+
+Dado que los escenarios ocurren una única vez, la estimación de los $\theta$ debemos hacerla en base a otra información. A continuación, lo que proponemos es usar la estructura de la red para construir una distribución _a priori_ sobre los $\theta$ que nos permita representar las conexiones que esta representa, sin darnos información específica sobre si las personas van a estar o no en el evento.
+
+Para construir nuestra priori sobre los $\theta$ vamos a seguir dos pasos: 
+
+* El primero consiste en definir cuál es la distribución de probabilidad que representa una red que consista de dos personas conectadas por un link. Dado que los links serán nuestra unidad fundamental, necesitamos tener caracterizado qué información nos da cada uno.
+
+* El segundo consiste en definir como combinar distintos links. Las redes del gráfico anterior nos sugieren que si bien tiene sentido pensar las probabilidades en términos de los links, la información de un nodo debería afectar a los otros a través de las conexiones que hay entre ambos.
+
+### Notación
+
+En todo momento estaremos pensando en las probabilidades de que ocurran los escenarios. Ya mencionamos que notaremos un escenario $rs$, que significa que la persona r y la persona s ambas están presentes en el evento. También ya mostramos que para cada escenario que involucre a un subconjunto de personas, tenemos un espacio muestral completo, en el sentido de que $rs + \bar r s + r \bar s + \bar r \bar s = 1$, dado que necesariamente alguna de estas situaciones debe ser cierta. Este concepto vale por igual al ampliar el número de personas. Además, vimos que podemos marginalizar sobre escenarios, de forma que, por ejemplo $rs = rsq + rs \bar q$, gracias a que $q + \bar q = 1$. Las probabilidades las notamos con la letra $\theta$, donde $P(rs) = \theta_{rs}$. De las relaciones entre los escenarios se sigue que 
+
+$$
+\theta_{rs} + \theta_{r \bar s} + \theta_{\bar r s} + \theta_{\bar r \bar s} = 1
+$$
+y que 
+$$
+\theta_{rs} = \theta_{rsq} + \theta_{rs\bar q}
+$$
+
+Para ahorra espacio, llamaremos $z_{rs}=(\theta_{rs},\theta_{r \bar s},\theta_{\bar r s})$, que es el vector que nos representa las tres probabilidades necesarias para definir las probabilidades de los eventos que sólo involucren a las personas r y s.
+
+### Un sólo link
+
+Exploremos cómo podemos representar la información que nos da una conexión única en la red. Para este ejemplo pensaremos que sólo tenemos dos personas 1 y 2. Ya vimos que personas desconectadas de estas serán independientes, por lo que no cambiarán nada en la distribución de probabilidad. Por otro lado, combinaciones de links será lo que nos ocupará más adelante.
+
 ```{r}
 require(igraph)
 make_empty_graph(n=2,directed=FALSE) %>% add_edges(edges = c(1,2)) %>% plot()
 ```
 
-La imagen mental con la que estamos trabajando en esta situación es que tenemos dos personas conectadas por un link. Este link lo que representa es que hay muchas más chances de encontrar a estas dos personas juntas que separadas. Con eso dicho, partimos de que tenemos que definir tres valores $\theta_{12},\theta_{1 \bar 2}, \theta_{\bar 1 2}$ para definir la distribución de probabilidad de estas dos personas (recordar que $\theta_{\bar 1 \bar 2}$ se obtiene a partir de que la suma total debe ser 1). Nuestro objetivo no es definir exactamente estos valores, sino dar una distribución de probabilidad que represente los posibles valores que pueden tomar. Por esta razón, una distribución de Dirichlet es lo más razonable para describirlos.
-
-Una distribución de Dirichlet tiene la pinta:
+Partimos de que tenemos que definir tres valores $\theta_{12},\theta_{1 \bar 2}, \theta_{\bar 1 2}$ para definir la distribución de probabilidad de estas dos personas. Nuestro objetivo no es definir exactamente estos valores, sino dar una distribución de probabilidad que represente los posibles valores que pueden tomar. Por esta razón, una distribución de Dirichlet es lo más razonable para describirlos. La distribución de Dirichlet es la conjugada de la multinomial, y cumple con los requerimientos que pedimos para los parámetros: todos los $\theta$ deben ser mayores a cero y menores a uno, y deben sumar uno al considerar los cuatro escenarios posibles. Para definir la distribución de Dirchlet, necesitamos definir en principio cuatro parámetros $\kappa_{12}$,$\kappa_{1 \bar 2}$,$\kappa_{\bar 1 2}$ y $\kappa_{\bar 1 \bar 2}$ que comandan los valores esperados y la varianza de cada uno de los $\theta$. Necesitaremos definir también $\kappa = \kappa_{12}+\kappa_{1 \bar 2}+ \kappa_{\bar 1 2}+\kappa_{\bar 1 \bar 2}$. Una distribución de Dirichlet tiene la pinta:
 
 $$
-f(\theta_{12},\theta_{1 \bar 2},\theta_{\bar 1 2}|\kappa_{12},\kappa_{1 \bar 2},\kappa_{\bar 1 2},\kappa_{\bar 1 \bar 2}) \propto \theta_{12}^{\kappa_{12}-1} \theta_{1 \bar 2}^{\kappa_{1\bar 2}-1} \theta_{\bar 1 2}^{\kappa_{\bar 1 2}-1} (1-\theta_{12}-\theta_{1 \bar 2}-\theta_{\bar 1 2})^{\kappa_{\bar 1 \bar 2}-1}
+f(z_{12}|\kappa_{12},\kappa_{1 \bar 2}, \kappa_{\bar 1 2},\kappa_{\bar 1 \bar 2}) = \frac{\Gamma(\kappa)}{\Gamma(\kappa_{12}) \Gamma(\kappa_{1 \bar 2}) \Gamma(\kappa_{\bar 1 2}) \Gamma(\kappa_{\bar 1 \bar 2})} \theta_{12}^{\kappa_{12}-1} \theta_{1 \bar 2}^{\kappa_{1\bar 2}-1} \theta_{\bar 1 2}^{\kappa_{\bar 1 2}-1} (1-\theta_{12}-\theta_{1 \bar 2}-\theta_{\bar 1 2})^{\kappa_{\bar 1 \bar 2}-1}
 $$
-Es decir, que la distribución queda definida especificando los valores de 4 parámetros $\kappa_{rs}$. Para lo que sigue es útil tener presente también que
+donde $\Gamma$ es la función gamma, similar al factorial.
+
+Para lo que sigue es útil tener presente también que
 
 $$
 E[\theta_{rs}] = \frac{\kappa_{rs}}{\kappa}
 $$
-$$
-\kappa = \kappa_{12}+\kappa_{1 \bar 2}+\kappa_{\bar 1 2}+\kappa_{\bar 1 \bar 2}
-$$
-Además, al considerar la suma de dos de los $\theta_{rs}$ (es decir agregar sobre un subconjunto de posibilidades) lo que obtenemos es una distribución de Dirichlet, con los valores de $\kappa_{rs}$ sumados. De esta forma, si consideramos $\theta_1 = \theta_{12} + \theta_{1 \bar 2}$, la probabilidad marginal de encontrar a la persona 1, y $\theta_2 = \theta_{1 2} + \theta_{\bar 1 2}$ la probabilidad de encontrar a la persona 2 en el evento, tenemos que:
+
+Al considerar la suma de dos de los $\theta_{rs}$ (es decir agregar sobre un subconjunto de posibilidades) lo que obtenemos es una distribución de Dirichlet, con los valores de $\kappa_{rs}$ sumados. De esta forma, si consideramos $\theta_1 = \theta_{12} + \theta_{1 \bar 2}$, la probabilidad marginal de encontrar a la persona 1, y $\theta_2 = \theta_{1 2} + \theta_{\bar 1 2}$ la probabilidad de encontrar a la persona 2 en el evento, tenemos que:
 
 $$
 \theta_1 \sim Beta(\kappa_{12} + \kappa_{1 \bar 2},\kappa_{\bar1 2} + \kappa_{\bar 1 \bar 2})
@@ -67,14 +141,13 @@ $$
 (recordar que la distribución Beta es una Dirichlet con sólo dos parámetros).
 
 
-Dado que lo que queremos representar mediante los $\theta_{rs}$ es que lo más probable es encontrarlos juntos, una posibilidad es decir que
+Con todo esta estructura definida, lo que queremos es elegir los parámetros de la distribución para que representen lo que intuímos a partir de los links. Lo que interpretamos que representa un link es que es más probable que las personas a sus extremos tengan participen del igual forma del evento. Es decir, es más probable $\theta_{12}$ y $\theta_{\bar 1 \bar 2}$ (ambas personas participan o no del evento) que $\theta_{1 \bar 2}$ y $\theta_{1 \bar 2}$ (sólo participa del evento una de las personas). Matemáticamente, representamos esto a través de una relación entre los valores esperados de los $\theta$. Definimos a $\gamma$ como la cantidad de veces más probable que es encontrar juntas a las personas que separadas:
 
 $$
 \gamma = \frac{E[\theta_{12} + \theta_{\bar 1 \bar 2}]}{E[\theta_{1\bar 2} + \theta_{ 1 \bar 2}]} = \frac{\kappa_{12} + \kappa_{\bar 1 \bar 2}}{\kappa_{\bar1 2} + \kappa_{ 1 \bar 2}}
 $$
-Especificar el parámetro $\gamma$ nos permite decir cuantas veces más creible consideramos que es encontrar a ambas personas juntas (es decir que ambas estén o ambas no estén) en comparación a que una sí esté y la otra no. 
 
-Por otro lado, considerando el hecho de que las distribuciones de $\theta_1$ y $\theta_2$ son Betas, querríamos que estas no provean información ni afirmativa ni negativa sobre las posibilidades de encontrar a las personas en el evento (esta información debería provenir de otra fuente que no sea la red). Por lo tanto obtenemos las tres ecuaciones:
+Por otro lado, considerando el hecho de que las distribuciones de $\theta_1$ y $\theta_2$ son Betas, querríamos que estas no provean información ni afirmativa ni negativa sobre las posibilidades de encontrar a las personas en el evento (esta información debería provenir de otra fuente que no sea la red). Por lo tanto obtenemos las tres ecuaciones. Podemos interpretar el hecho de que las distribuciones de $\theta_1$ y $\theta_2$ no nos ayuden a afirmar ni a negar que las personas van a estar o no en el evento como pedir que $E[\theta_1] = E[\theta_2]=0.5$. Esto dice que nuestra expectativa sobre sus valores es que sean 0.5. Que estén o no en el evento es igualmente probable. Esto se traduce en una condición sobre los exponentes de las Betas, que deben ser iguales. De esta forma, tenemos tres ecuaciones que representan lo que propusimos sobre el sistema:
 
 $$
 \begin{eqnarray}
@@ -83,7 +156,19 @@ $$
 \kappa_{12} - \kappa_{1 \bar  2} + \kappa_{\bar 12}  -\kappa_{\bar 1 \bar 2} = 0
 \end{eqnarray}
 $$
-Despejando estas ecuaciones llegamos a que, para que $E[\theta_1] = E[\theta_2]  = 0.5$ necesitamos  $\kappa_{1 \bar 2} = \kappa_{\bar 1 2}$, y $\kappa_{12} = \kappa_{\bar 1 \bar 2}$, y que $\kappa_{1 \bar 2} = \frac{1}{\gamma} \kappa_{12}$. Si usamos como parámetros de control de la distribución a $\gamma$ y a $\kappa$, tendremos que $\kappa = \frac{2}{\gamma} \kappa_{12} + 2 \kappa_{12} = 2 \frac{\gamma+1}{\gamma } \kappa_{12}$ y por lo tanto
+
+La primer ecuación es la relación impuesta por $\gamma$, y las otras dos salen de pedir que las esperanzas de los $\theta_1$ y $\theta_2$ sean iguales a 0.5.
+
+Despejando estas ecuaciones llegamos a que 
+
+$$
+\begin{align}
+\kappa_{1 \bar 2} = \kappa_{\bar 1 2}\\
+\kappa_{12} = \kappa_{\bar 1 \bar 2}\\
+\kappa_{1 \bar 2} = \frac{1}{\gamma} \kappa_{12}
+\end{align}
+$$
+Si usamos como parámetros de control de la distribución a $\gamma$ y a $\kappa$, tendremos que $\kappa = \frac{2}{\gamma} \kappa_{12} + 2 \kappa_{12} = 2 \frac{\gamma+1}{\gamma } \kappa_{12}$ y por lo tanto
 
 $$
 \begin{eqnarray}
@@ -95,26 +180,40 @@ Vemos que bajo estas condiciones, la esperanza $\theta_{rs} = \kappa_{rs}/\kappa
 
 $$
 \begin{eqnarray}
-\kappa_1 = \kappa_{12} + \kappa_{1 \bar 2}  \frac{\gamma+1}{2(\gamma +1 )} \kappa = \frac{1}{2} \kappa \\
+\kappa_1 = \kappa_{12} + \kappa_{1 \bar 2} = \frac{\gamma+1}{2(\gamma +1 )} \kappa = \frac{1}{2} \kappa \\
 \kappa_2 = \kappa_1 = \frac{1}{2} \kappa \\
 \end{eqnarray}
 $$
+
 El parámetro $\kappa$ comanda la varianza del sistema. Por ejemplo, para los $\theta_1,\theta_2$, su varianza está dada por
 
 $$
 V[\theta_1] = V[\theta_2] = \frac{1}{4(\kappa+1)}
 $$
 
-Entonces, para definir nuestro modelo del link necesitamos especificar dos parámetros: $\gamma$ y $\kappa$, que dictan la esperanza y la varianza del sistema.
+Entonces, para definir nuestro modelo del link necesitamos especificar dos parámetros: $\gamma$ y $\kappa$, que dictan la esperanza y la varianza del sistema. Para resumir, llamaos a $w_{12} = (\gamma,\kappa)$, que nos permite definir las distribuciones completamente.
 
-Veamos un poco qué pinta tienen estas distribuciones:
+$$
+f(z_{12}|w_{12}) = \frac{\Gamma(\kappa)}{[\Gamma(\frac{\gamma \kappa}{2(\gamma+1)}) \Gamma(\frac{ \kappa}{2(\gamma+1)})]^2}
+\theta_{12}^{\frac{\gamma \kappa}{2(\gamma+1)}-1} \theta_{1 \bar 2}^{\frac{ \kappa}{2(\gamma+1)}-1} \theta_{\bar 1 2}^{\frac{ \kappa}{2(\gamma+1)}-1} (1-\theta_{12}-\theta_{1 \bar 2}-\theta_{\bar 1 2})^{\frac{\gamma \kappa}{2(\gamma+1)}-1}
+$$
+
+Mientras que para $\theta_r$ tendremos:
+
+$$
+f(\theta_r|w_{12}) = \frac{\Gamma(\kappa)}{\Gamma(\kappa/2)^2} \theta_r^{\kappa/2-1} (1-\theta_r)^{\kappa/2-1} 
+$$
+
+Veamos un poco qué pinta tienen estas distribuciones. Para ejemplificar elegimos $\gamma=10$ y $\kappa=22$, de forma tal que $\kappa_{12}=\kappa_{\bar 1 \bar 2} = 10$ y $\kappa_{1 \bar 2} = \kappa_{\bar 1 2}=1$. Las esperanzas son $E[z_{12}] = (0.45,0.05,0.05)$. Como mencionamos antes, $E[\theta_r] = 1/2$ y $\sqrt{V[\theta_r]} = 0.1$ es su desviación estandar.
+
+En los gráficos que siguen, la notación usada es $\theta_{12}$=`t12`, $\theta_{1 \bar 2}$=`t1n2`, $\theta_{\bar 1 2}$ =`tn12` y $\theta_{\bar 1 \bar 2}$=`tn1n2`.
 
 ```{r}
 require(MCMCpack)
 require(ggplot2)
 require(patchwork)
 gamma=10
-kappa=20
+kappa=22
 kappas = c(gamma,1,1,gamma)*kappa/(2*(gamma+1))
 muestras = rdirichlet(n=1e5,kappas)
 
@@ -139,7 +238,106 @@ print(gg2)
 print(gg1_2)
 ```
 
+Vemos que con estos valores las distribuciones de $\theta_{12}$ y $\theta_{\bar 1 \bar 2}$ (representadas a través de `t12`, recuerden que ambas distribuciones son iguales), están concentradas en 0.45, con una varianza bastante amplia. Por otro lado, la distribución de $\theta_{1 \bar 2}$ y $\theta_{\bar 1 2}$ están concentradas cerca de cero. Graficando $\theta_{12}$ vs $\theta_{ 1 \bar 2}$ vemos una distribución que para valores altos de $\theta_{1 \bar 2}$ indica valores más bajos de $\theta_{12}$, pero que tiene el grueso de su masa concentrada en (0.45,0.05), donde está las esperanzas de ambas variables. Graficando $\theta_{12}$ contra $\theta_{\bar 1 \bar 2}$ vemos que la distribución está concentrada sobre la recta $\theta_{12}+\theta_{\bar 1 \bar 2}=1$, aunque el grueso de la distribución está en (0.45,0.45). Algo similar ocurre para $\theta_{1 \bar 2}$ vs $\theta_{\bar 1 2}$, aunque aquí el grueso de la distribución se concentra en (0.05,0.05). Las distribuciones de $\theta_1$ y $\theta_2$ se centran en 0.5. Graficando una en función de la otra vemos que están fuertemente correlacionadas.
+
+
+#### $\gamma$ y $\kappa$
+
+$\gamma$ y $\kappa$ deberían ser elegidos para representar la información que posee sobre la red quien la usa. Sin embargo, es útil entender cómo varian las distribuciones al variar sus valores. 
+
+Teniendo en cuenta que la esperanza de los $\theta$ está completamente dada por $\gamma$, y que $E[\theta_{12} ] = E[\theta_{\bar 1 \bar 2}]$ y $E[\theta_{1 \bar 2} ] = E[\theta_{\bar 1 2}]$ entonces podemos graficar uno en función del otro:
+
+```{r}
+gamma = 10**(seq(-10,10,.1))
+et12 = gamma/(2*(gamma+1))
+et1n2 = 1/(2*(gamma+1))
+plot(et12,et1n2)
+```
+La relación entre ambos es lineal, moviendose de $E[\theta_{12}] = 0.5$ cuando $\gamma\rightarrow +\infty$ a $E[\theta_{12}] = 0$ cuando $\gamma \rightarrow 0$
+
+
+Por otro lado, el parámetro $\kappa$ mide la varianza del sistema, a $\gamma$ fijo. En particular, en los $\theta_r$ es casi la inversa de la varianza
+
+```{r}
+kappa = seq(0,1e3,1)
+V1 = 1/(4*(kappa+1))
+plot(kappa,V1)
+```
+Cuando pensamos en las otras variables, vemos que tendremos dos varianzas distintas:
+
+$$
+V[\theta_{12}] = \frac{\gamma (\gamma +2) }{4(\gamma+1)^2} \frac{1}{\kappa +1}
+$$
+
+$$
+V[\theta_{1 \bar 2}] = \frac{(2\gamma +1) }{4(\gamma+1)^2} \frac{1}{\kappa +1}
+$$
+
+Para $\kappa$ fijo, $V[\theta_{12}] \rightarrow \frac{1}{4(\kappa+1)}$ y $V[\theta_{1 \bar 2}] \rightarrow 0$ cuando $\gamma \rightarrow +\infty$. En $\gamma=0$ ocurre la situación inversa. 
+
+```{r}
+require(ggplot2)
+gammas = 10**seq(0,1,.05)
+kappas = seq(0,50,1)
+V12f = function(gamma,kappa) gamma*(gamma+2)/(2*(gamma+1))**2/(kappa+1)
+E12f = function(gamma,kappa) gamma/(2*(gamma+1))
+df = expand.grid('gamma'=gammas,'kappa'=kappas)
+df$V12 = V12f(df$gamma,df$kappa)
+df$E12 = E12f(df$gamma,df$kappa)
+ggplot(data=df,mapping=aes(x=gamma,y=kappa,z=V12,fill=E12)) + geom_contour(aes(colour = after_stat(nlevel)))
+```
+Este gráfico nos muestra que podemos ir aumentando los valores de $\gamma$ y $\kappa$ conjuntamente para lograr mantener la varianza constante.
+
+
+
+```{r}
+require(ggplot2)
+gammas = 10**seq(0,2,.05)
+kappas = seq(0,100,1)
+V12f = function(gamma,kappa) gamma*(gamma+2)/(2*(gamma+1))**2/(kappa+1)
+V1n2f = function(gamma,kappa) (2*gamma+1)/(2*(gamma+1))**2/(kappa+1)
+
+df = expand.grid('gamma'=gammas,'kappa'=kappas)
+df$VS = 2*V12f(df$gamma,df$kappa)+2*V1n2f(df$gamma,df$kappa)
+
+ggplot(data=df,mapping=aes(x=gamma,y=kappa,z=VS)) + geom_contour(aes(colour = after_stat(nlevel)))
+```
+Calculando la varianza "total" del sistema (la suma de las 4 varianzas) lo que encontramos es una curva que se repite para todos los valores de $\kappa$. Mientras que el decaimiento de esta curva está dado por $\gamma$, el offset al que ocurre está dado por $\kappa$.
+
+
+```{r}
+entropy_dir = function(gamma,kappa){
+  g = base::gamma
+  dg = base::digamma
+  a = 2*(gamma+1)
+  lB = -log(g(kappa))+2*(log(g(gamma/a*kappa))+log(g(kappa/a)))
+  phi = (kappa-4)*dg(kappa)
+  phi2 = 2*(gamma/a*kappa-1)*dg(gamma/a*kappa) + 2*(kappa/a-1)*dg(kappa/a)
+  H = lB + phi-phi2
+  return(H)
+} 
+gammas = 10**seq(0,3,.05)
+kappas = seq(0,200,1)
+df = expand.grid('gamma'=gammas,'kappa'=kappas)
+df$H = entropy_dir(df$gamma,df$kappa)
+ggplot(data=df,mapping=aes(x=gamma,y=kappa,z=H)) + geom_contour(aes(colour = after_stat(nlevel)))
+entropy_dir(1e3,2)
+entropy_dir(250,2)
+```
+
+Graficando la entropía, vemos que a mayor $\gamma$, necesitamos un $\kappa$ más chico para lograr una mayor entropía.
+
+De estas gráficas podemos concluir que podemos fijar una magnitud que sea interpretable, por ejemplo la varianza total, y fijarla en un dado valor $V_0$. Entonces, podremos encontrar una curva que de $\kappa$ en función de $\gamma$.
+
+
+### Conclusiones
+
+Vimos cómo construir la distribución de probabilidad de un link. Esto se realiza a través de una Dirichlet que tiene dos parámetros a definir, $\gamma$ que representa cuanto más creible es el escenario "en conjunto" que el escenario "por separado"; y $\kappa$ que mide la variabilidad en el sistema completo. Cuando consideremos un link que une a las personas r y s, llamaremos a la función que obtuvimos $f_{rs}(z_{rs}|w_{rs})$, o simplemente $f_{rs}(z_{rs})$ o $f_{rs}$ según se sobre entienda o no los argumentos y parámentros en cada caso.
+
+
 ## Considerando varios links
+
+Habiendo definido forma funcional para la distribución de un link, ahora nuestra siguiente cuestión es cómo extender esa estructura a un conjunto de links. Lo haremos analizando ejemplos de complejidad incremental.
 
 ### Dos links separados
 
@@ -149,13 +347,14 @@ make_empty_graph(n=4,directed=FALSE) %>% add_edges(edges = c(1,2,3,4)) %>% plot(
 ```
 
 
-Si bien en sí no es muy interesante, es útil para motivar el paso siguiente considerar qué podríamos decir de dos links separados. Dado que estos dos links no conectan nodos en común, la densidad conjunta sería simplemente el producto de las densidades.
+Si bien en sí no es muy interesante, es útil para motivar el paso siguiente. Consideremos qué podríamos decir de dos links separados. Dado que estos dos links no conectan nodos en común, la densidad conjunta sería simplemente el producto de las densidades.
 
 Si $f_{12}$ es la densidad asociada a considerar el link de las personas $1$ y $2$, y $f_{34}$ lo mismo para $3$ y $4$, entonces tendríamos que
 
 $$
-f_{12,34} = f_{12} \cdot f_{34}
+f_{12,34}(z_{12},z_{13}) = f_{12}(z_{12}) \cdot f_{34}(z_{34})
 $$
+donde $f_{12,34}$ representa la densidad conjunta de $z_{12}$ y $z_{34}$. Al no existir correlación entre ambas simplemente se multiplican entre sí. Agregando un poco más de notación, llamaremos $z$ al concatenado de los $z_{rs}$. En este caso, $z=(z_{12},z_{34}) = (\theta_{12},\theta_{1\bar 2},\theta_{\bar 1 2},\theta_{3 4},\theta_{3\bar 4},\theta_{\bar 3 4})$.
 
 ### Un nodo con dos links
 
@@ -164,63 +363,60 @@ require(igraph)
 make_empty_graph(n=3,directed=FALSE) %>% add_edges(edges = c(1,2,1,3)) %>% plot()
 ```
 
-Si queremos considerar un nodo con tres links, en principio deberíamos volver a la situación inicial: escribir una distribución de probabilidad para parámetros $\theta_{rsq}$, con $2^3-1$ parámetros a especificar. Esto nos mantiene la dificultad de tener que especificar valores para muchos de esos parámetros, cosa que en principio no es para nada claro como hacer. Nuestra información de la red, por otro lado, nos permite pensar de a pares en cada link. Volviendo sobre el ejemplo de dos links separados, aquí lo que podríamos pensar es que nuestra red equivale a dos links separados, a los cuales "pegamos", indicando que el nodo $1$ es el mismo que el nodo $4$. Si pensamos que cada link está representando parte de la información global de la red, podríamos interpretar que:
+En este ejemplo, tenemos un vértice, en el cual la persona 1 está conectada a la 2 y a la 3, pero la 2 y la 3 no se conectan entre sí. Como mencionamos previamente, podríamos pensar este problema a través de una densidad conjunta de a tres: $\theta_{123},\theta_{12\bar 3},\dots,\theta_{\bar 1 \bar 2 \bar 3}$. El problema es que definir razonablemente esta densidad requeriría tener en claro por ejemplo, la diferencia en lo que esperamos de $\theta_{123}$ y $\theta_{12 \bar 3}$. Como la red sólo nos muestra relaciones de a pares, no es claro como representar esto. 
 
-$$
-\begin{eqnarray}
-\theta_{12} = \theta_{123} + \theta_{12 \bar 3} \\
-\theta_{13} = \theta_{123} + \theta_{1 \bar 2 3} \\
-...
-\end{eqnarray}
-$$
-Es decir, la distribución que armamos para los links se ocupa de mirar las distribuciones marginales de la distribución global. Por lo tanto
+La propuesta en cambio es continuar trabajar a través de los parámetros que pudimos asociar a los links. En este caso, $z_{12}$ y $z_{13}$. El tema es que claramente estos dos vectores no son independientes. A diferencia de lo que ocurría con $z_{12}$ y $z_{34}$ en el ejemplo anterior, que no estaba conectados, en este caso tenemos una conexión a través de la persona 1. Si pensamos que lo que comanda todo al final es una distribución $\theta_{123},\theta_{12\bar 3},\dots,\theta_{\bar 1 \bar 2 \bar 3}$ asociada a los 8 escenarios posibles $123, 12 \bar 3, \dots, \bar 1 \bar 2 \bar 3$, tenemos que
 
 $$
 \begin{align}
-\theta_1 &= \theta_{1 2} + \theta_{1 \bar 2} \\
-&= \theta_{1 2 3} + \theta_{1 2 \bar 3}  + \theta_{1 \bar 2 3} + \theta_{1 \bar 2 \bar 3} \\
-&= \theta_{1 2 3} + \theta_{1 \bar 2 3} + \theta_{1 2 \bar 3}   + \theta_{1 \bar 2 \bar 3} \\
-\theta_1 &= \theta_{1 3} + \theta_{1 \bar 3} \\
-\theta_{1 2} + \theta_{1 \bar 2} &= \theta_{1 3} + \theta_{1 \bar 3} \\
-
+\theta_{12} = \theta_{123} + \theta_{12 \bar 3} \\
+\theta_{1 \bar 2} = \theta_{1 \bar 2 3} + \theta_{1 \bar2 \bar 3} \\
+\theta_{13} = \theta_{123} + \theta_{1 \bar 2 3} \\
+\theta_{1 \bar 3} = \theta_{1 2 \bar  3} + \theta_{1 \bar2 \bar 3} \\
+\dots
 \end{align}
 $$
 
-Es decir que el hecho de que ambos links ($l_{12}$ y $l_{13}$) conecten ambos con la persona $1$ impone una relación entre los valores que pueden tomar sus valores de $\theta_{rs}$, en forma de la ecuación 
+Con relaciones similares para el resto de los parámetros. Más aún, 
 
 $$
-\theta_{1 2} + \theta_{1 \bar 2} - \theta_{1 3} - \theta_{1 \bar 3} =0
+\begin{align}
+\theta_1 &=  \\ 
+&= \theta_{123} + \theta_{12 \bar 3} + \theta_{1 \bar 2 3 } + \theta_{1 \bar 2 \bar 3}   \\ 
+&= \theta_{13} + \theta_{1 \bar 3} \\
+\rightarrow \theta_{12} + \theta_{1 \bar 2} &= \theta_{13} + \theta_{1 \bar 3}
+\end{align}
 $$
 
-Esta relación impone un vínculo entre las dos distribuciones marginales, y resta una dimensión al problema: pasamos de tener 6 parámetros a definir, a tener 5. Matemáticamente, esta relación de vínculo puede representarse en la densidad escribiendola con una delta de Dirac, que asigne valor cero a los valores fuera del vínculo.
+Esta relación impone un vínculo entre las dos distribuciones marginales, y resta una dimensión al problema: pasamos de tener 6 parámetros a definir, a tener 5. Matemáticamente, esta relación de vínculo puede representarse en la densidad escribiendola con una delta de Dirac, que asigne valor cero a los valores fuera del vínculo. Incorporando eso a nuestra propuesta de $f_{12,13}$ tendremos que
 
 $$
-f_{12,13} = f_{12} \cdot f_{13} \cdot \delta(\theta_{1 2} + \theta_{1 \bar 2} - \theta_{1 3} - \theta_{1 \bar 3})
+f_{12,13}(z_{12},z_{13}) = f_{12}(z_{12}) \cdot f_{13}(z_{13}) \cdot \delta(\theta_{1 2} + \theta_{1 \bar 2} - \theta_{1 3} - \theta_{1 \bar 3})
 $$
 La delta de Dirac vale infinito sobre el vínculo, lo que permite que marginalicemos sobre el mismo reduciendo la dimensión del problema.
 
-Si bien esto formalmente es muy simpático, desde una perspectiva práctica no nos permite avanzar mucho. Por otro lado, las ecuaciones con las que estamos trabajando son lineales. Eso nos permite encontrar una forma de escribir los valores de los $\theta$ de forma que cumplan automáticamente el vínculo.
-Para esto, consideremos ahora un vector $z$ que describe el estado completo del sistema:
+Si bien esto formalmente es muy simpático, desde una perspectiva práctica no nos permite avanzar mucho. Por otro lado, las ecuaciones con las que estamos trabajando son lineales. Eso nos permite encontrar una forma de escribir los $\theta$ de forma que cumplan automáticamente el vínculo.
+Para esto, volvamos sobre el vector $z = (z_{12},z_{13}) = (\theta_{12},\theta_{1 \bar 2},\theta_{\bar 1 2},\theta_{13},\theta_{1 \bar 3},\theta_{\bar 1 3})$
 
-$$
-z = (\theta_{12},\theta_{1 \bar 2},\theta_{\bar 1 2},\theta_{13},\theta_{1 \bar 3},\theta_{\bar 1 3})
-$$
-Si nuestra condición de vínculo está representada por una matriz $A$ tal que $Az=0$, tenemos que $A=(1,1,0,1,1,0)$. Los vectores $\tilde z$ que cumplen con la condición de vínculo son aquellos que están en el núcleo de $A$. Usando MASS podemos calcular el núcleo fácilmente.
+Si nuestra condición de vínculo está representada por una matriz $A$ tal que $Az=0$, tenemos que $A=(1,1,0,-1,-1,0)$. Los vectores $\tilde z$ que cumplen con la condición de vínculo son aquellos que están en el núcleo de $A$. Usando MASS podemos calcular el núcleo fácilmente.
 
 ```{r}
 require(MASS)
-A= c(1,1,0,1,1,0)
+A= c(1,1,0,-1,-1,0)
 fractions(Null(A))
 ```
-Las 5 columnas de esta matriz representan los 5 vectores ortogonales $v_1,\dots,v_5$ tales que cualquier combinación lineal de ellos cumple la condición impuesta. Entonces, eligiendo 5 valores $\eta_1,\dots,\eta_5$ tenemos
+Las 5 columnas de esta matriz representan los 5 vectores ortogonales $v_1,\dots,v_5$ tales que cualquier combinación lineal de ellos cumple la condición impuesta. Notemos que la condición de vínculo nos conecta los valores de $\theta_{12},\theta_{1 \bar 2}, \theta_{1 3}, \theta_{1 \bar 3}$, pero deja liberados a $\theta_{\bar 1 2},\theta_{\bar 1 3}$. Esto se manifiesta en que la segunda y la quinta columna del núcleo de $A$ indica que $v_2$ representa $\theta_{\bar 1 2}$ y $v_5$ representa a $\theta_{\bar 1 3}$.
+
+Eligiendo 5 valores $\eta_1,\dots,\eta_5$ tenemos
 
 $$
 z = \sum^5_{i=1} \eta_i v_i
 $$
-A su vez, las filas de la matriz de los $v_i$ nos dice los coeficientes que necesitamos para escribir los $\theta_{rs}$ en términos de los $\eta_i$. De esta forma, nuestra densidad final termina teniendo la pinta
+
+A su vez, las filas de la matriz de los $v_i$ nos dices los coeficientes que necesitamos para escribir los $\theta_{rs}$ en términos de los $\eta_i$. De esta forma, nuestra densidad final termina teniendo la pinta
 
 $$
-f_{12,13} = f_{12}(z_{12}(\eta)) \cdot f_{13}(z_{13}(\eta))
+f_{12,13}(z(\eta)) = f_{12}(z_{12}(\eta)) \cdot f_{13}(z_{13}(\eta))
 $$
 donde $\eta = (\eta_1,\dots,\eta_5)$ y $z_{rs}=(\theta_{rs},\theta_{r\bar s},\theta_{\bar r s})$. Esta propuesta ya nos permite obtener muestras de la distribución como en el caso anterior. 
 
@@ -230,8 +426,6 @@ $$
 \tilde z = \sum^5_{i=1} <z,v_i> v_i
 $$
 donde $<z,v_i> = \sum^6_{j=1} (v_{i})_j z_j$. Esto es especialmente útil si lo que queremos es corregir estimaciones de la esperanza, ya que la proyección es una operación lineal, y por lo tanto la esperanza de la proyección es la proyección de la esperanza ($E[\tilde z] = \tilde{ E[z]}$). El único problema del método del proyector es que si nuestras muestras están muy alejadas de la distribución real el resultado puede ser muy ruidoso.
-
-
 
 
 #### Ejemplo usando los $\eta$
@@ -295,6 +489,7 @@ print(ggL0$gL1)
 print(ggL0$gL2)
 print(ggL0$gL3)
 print(ggL0$gL4)
+print(ggL0$gL5)
 ```
 
 #### Ejemplo con los proyectores
@@ -364,6 +559,121 @@ print(ggL1$gL3)
 print(ggL1$gL4)
 ```
 
+### El triángulo
+
+Preparamos la red que vamos a usar:
+
+```{r}
+g = make_empty_graph(n=3,directed=FALSE)
+g = add_edges(g,c(1,2,1,3,2,3))
+plot(g)
+X = as_adjacency_matrix(g,sparse = FALSE)
+```
+
+El triángulo incluye tres links, por lo que en principio tenemos nueve parámetros distintos en el vector $z=(z_{12},z_{13},z_{23})$. Por otro lado, tenemos tres uniones, es decir, tres condiciones de vínculo. Eso resulta en seis parámetros $\eta_i$ libres a elegir. 
+
+Armamos la matriz de constraints, y el proyector.
+
+```{r}
+Z = generate_state_vector(X)
+A = generate_constraint_matrix(X)
+P = generate_proyector(A)
+print('El vector Z')
+print(Z)
+print('La matriz de constraints')
+print(A)
+print('El proyector')
+print(fractions(P))
+```
+
+En este caso, no podemos asociar a ninguno de los $v_i$ a un $\theta$ en particular. Esto tiene sentido ya que todos los nodos están vinculados entre sí.
+
+Definimos los parámetros para las distribuciones de cada link
+
+```{r}
+gamma = 10
+kappa_sum = 22
+kappas = generate_kappas(Z,gamma = gamma,K=kappa_sum)
+print(kappas)
+params = list('kappas'=kappas,'K'=P)
+```
+
+Y ahora lo bueno, definimos los parámetros para la simulación:
+
+```{r}
+z0 = generate_z0(kappas,kappa_sum)
+initial = t(P)%*%z0
+density = density_eta
+samples0 = sampling(density = density,initial=initial,params=params,full.result = FALSE,scale=6e-2)
+```
+
+
+Y con esto cargado, podemos explorar un poco los resultados:
+
+```{r}
+df0 = as.data.frame(t(P%*%t(samples0)))
+colnames(df0) = paste('t',Z,sep='')
+ggL0 = make_ggmagic(df0)
+print(ggL0$gL1)
+print(ggL0$gL2)
+print(ggL0$gL3)
+print(ggL0$gL4)
+print(ggL0$gL5)
+```
+
+### ¿Qué perdemos al movernos de 3 a 2 dimensiones?
+
+Al considerar tres nodos con tres links, tenemos en claro que estamos considerando correlaciones entre todos ellos. Sin embargo, mientras que el panteo del problema completo tiene ocho escenarios ($123$,$12 \bar 3$,$\dots$,$\bar 1 \bar 2 \bar 3$) y necesita siete parámetros $\theta$ para queda completamente definido en términos probabilísticos ($\theta_{123}$,$\theta_{1 2 \bar 3}$,$\dots$,$\theta_{\bar 1 \bar 2 3}$), nuestra aproximación al problema tiene nueve parámetros $\theta_{12},\dots,\theta_{13},\dots,\theta_{23},\dots$. Estos nueve parámetros se reducen a seis al incluir las condiciones de vínculos. Esto es un grado de libertad menos que el del problema completo. Por esto surge la pregunta: ¿qué nos estamos perdiendo?
+
+Para responder esto, un primer camino consiste en observar la transformación que hacemos al movernos a las primeras distribuciones marginales. Al considerar todas distribuciones de a dos variables, perdemos parte de la información.
+
+La transformación lineal que nos lleva de un escenario al otro la podemos encontrar explorando las operaciones que debemos hacer para ir de un nivel al otro
+
+```{r}
+require(MASS)
+require(pracma)
+M = marginalization_matrix(include.full.n=FALSE)
+# Esta es la matriz que usamos para marginalizar.
+## Nos mueve de el espacio de 3 personas a las combinaciones de 2 personas
+## Notar que no están incluidos los elementos con todas las personas negadas, debido a que son LD con el resto.
+print(M)
+
+
+
+K = Null(t(M))
+rownames(K) = colnames(M)
+# Este es el vector que cae en el núcleo
+fractions(K)
+
+# Este es el subespacio formado por la imagen
+fractions(orth(M))
+?orth
+```
+
+De esto vemos que el núcleo de la transformación lineal tiene dimensión uno (perdemos un elemento independiente al reducir), mientras que el de la imagen tiene dimensión seis (hay una parte de la preimagen que se pierde en el camino). Recordando que la dimensión del núcleo sumada a la de la imagen tiene que ser igual a la dimensión de partida, tenemos que al transformar perdemos una unidad de las siete originales, que va a parar al núcleo de la transformación lineal dada por la marginalización. Nuestra parametrización del triángulo captura el máximo posible que puede capturar teniendo en cuenta que nuestros parámetros de trabajo son de pares.
+
+Desconozco bien por qué, pero las componentes del vector del núcleo muestran que aquellos elementos que tienen una negación sola tienen un coeficiente igual y negativo, y aquellas que tienen un número par de negaciones (una o dos) tienen un coeficiente igual y positivo.  Si las sumaramos:
+
+#### Ampliación de dimensión via máxima entropía
+
+Como vimos, nuestro modelo es capaz de capturar las correlaciones a segundo orden, y hay una parte que inevitablemente se pierde cuando marginalizamos. Una pregunta posible es: ¿es posible usar la información de este modelo para construir uno a órden superior?
+
+Una forma posible de realizar esto consiste en considerar la distribución que maximiza la entropía y tiene estas mismas marginales. La distribución general recordemos que tiene tres indices $\theta_{123},\theta_{12 \bar 3},\dots,\theta_{\bar 1 \bar 2 \bar 3}$. Entonces lo que queremos es maximizar la entropía dadas las condiciones que tenemos:
+
+$$
+\begin{align}
+H = &-\sum_{r = 1,\bar 1} \sum_{s = 2,\bar 2} \sum_{q = 3,\bar 3} \theta_{rsq} \log \theta_{rsq} \\&+ \alpha ( \sum_{r = 1,\bar 1} \sum_{s = 2,\bar 2} \sum_{q = 3,\bar 3} \theta_{rsq} - 1) \\&+ \beta_{12} (\theta_{12} - (\theta_{123}+\theta_{12 \bar 3})) \\&+ \beta_{1\bar 2} (\theta_{1\bar 2} - (\theta_{1\bar 2 3}+\theta_{1 \bar 2 \bar 3})) \\&+ \beta_{\bar 1 2} (\theta_{\bar 1 2} - (\theta_{\bar 1 2 3}+\theta_{\bar 1 2 \bar 3})) \\&+ \beta_{\bar 1\bar 2} (\theta_{\bar 1 \bar 2} - (\theta_{\bar 1 \bar 2 3}+\theta_{\bar 1 \bar 2 \bar 3})) + \\&+ \beta_{13} (\theta_{13} - (\theta_{123}+\theta_{1 \bar 2 3})) \\&+ \dots
+\end{align}
+$$
+
+Esto resulta en muchas ecuaciones, de las cuales podemos concluir que 
+
+$$
+\theta_{rsq} = \alpha \beta_{rs} \beta_{rq} \beta_{sq}
+$$
+y necesitaríamos resolver con esta forma funcional las condiciones de vínculo. Hasta ahora realizar esto a mano no me dio frutos, pero igualmente podemos resolverlo numéricamente. Vale la pena notar que esto muestra que la distribución de probabilidad conjunta usa todas las informaciones cruzadas (es decir, para armar $\theta_{123}$ se usan $\theta_{12}$,$\theta_{13}$ y $\theta_{23}$), más allá de como sea exactamente su forma funcional. Una pequeña implementación con un optimizador permite igualmente recuperar la distribución conjunta menos informativa a partir de los valores numéricos de las marginales.
+
+
 ##### Comentario sobre las dimensiones y el escalamiento
 
 Si consideramos que en una red tenemos $m$ links y $p$ ecuaciones de vínculo, entonces tendremos $3m-p$ parámetros en nuestro sistema: $3$ $\theta_{rs}$ por cada link, y $p$ condiciones de vínculo que los conecten. Si comparamos esto con los $2^n$ parámetros que tendríamos si f
@@ -371,14 +681,22 @@ Si consideramos que en una red tenemos $m$ links y $p$ ecuaciones de vínculo, e
 
 ## Las mediciones
 
-Este modelo que construimos propone una forma de transformar una red en una distribución que conecte a las personas. Bajo esta imagen, lo que suponemos que sería una medición típica $M_i$ sería sobre las variables $\theta_i$. Por ejemplo, nuestra medición podría ser 
+### Discusión: ¿qué medimos en este problema?
+
+En este ejercicio planteado, empezamos preguntandonos por distintos escenarios $123,12\bar3,\dots$. Construimos un modelo bayesiano que nos permite conectar las probabilidades de que cada persona participe de un evento en términos de una red. Sin embargo, este modelo es en principio _estático_ si no consideramos en qué forma puede actualizarse con mediciones, información nueva, etc. La pregunta es, ¿cómo incorporamos en este modelo que creemos (por otras fuentes) que $P(1)$ es alta? ¿Cómo incorporamos que la persona 1 se encuentra en el evento con certeza y por lo tanto $\theta_1=1$?
+
+La primer pregunta la respondemos incluyendo una distribución extra que representa la información que nos dan sobre $\theta_1$. Para la segunda, necesitamos construir un mecanismo para obtener $P(r|1),r\neq1$ a partir de nuestros valores previos $P(r) = \theta_r$. 
+
+En los próximos apartados presentamos respuestas a ambas preguntas.
+
+### Información externa sobre los $\theta$
+
+Podemos imaginar que una persona está participando ya del evento y nos dice que cree con cierta confianza haber visto en el evento a la persona de interés. O que debido a otros análisis genéticos las chances de que la persona se encuentre en este evento son de $10^10$. Bajo cualquiera de estas imagenes, una medición típica $M_i$ sería sobre las variable $\theta_i$. Es decir, la información (externa) que obtenemos es referente al $\theta_i$. Las mediciones se verán representadas por una función de verosimilitud. Por ejemplo:
 
 $$
 g(\theta_1|M_1) \propto \theta_1^{\alpha_{1}-1} (1-\theta_1)^{\alpha_{\bar 1}-1}
 $$
-donde la función $g$ lo que representa es la verosimilitud de cada $\theta$ en base a una medición. 
-
-Esto equivaldría a que (basandose en la información de la medición) 
+donde la función $g$representa la verosimilitud de cada $\theta_1$ en base a una fuente de información externa. Los parámetros $\alpha_1$ y $\alpha_{\bar 1}$ pueden ser obscuros de entender a simple vista, pero si pensamos en que nos informan el valor esperado (según la medición) de $\theta_i$ y su varianza, equivaldría a decir que:
 
 $$
 \begin{align}
@@ -386,7 +704,9 @@ E[\theta_1|M_1] &= \frac{\alpha_1}{\alpha_1 + \alpha_{\bar 1}} \\
 V[\theta_1|M_1] &= \frac{\alpha_1 \alpha_{\bar 1}}{(\alpha_1 + \alpha_{\bar 1})^2} \frac{1}{\alpha_1 + \alpha_{\bar 1} +1}
 \end{align}
 $$
-Esto equivale en nuestras variables a decir
+de donde podríamos bien despejar los valores de $\alpha_1$ y $\alpha_{\bar 1}$. En última instancia, lo que estamos haciendo es plasmar la información que nos dan (información sobre $\theta_1$) en una distribución de Dirichlet (equivalente a usar una distribución normal cuando nos dicen media y varianza).
+
+En las variables $\theta_{12}$,$\theta_{1 \bar 2}$ y $\theta_{\bar 1 2}$ esto equivale a decir:
 
 $$
 g(z|M_1) \propto (\theta_{12} + \theta_{1 \bar 2})^{\alpha_{1}-1} (1-\theta_{12} - \theta_{1 \bar 2})^{\alpha_{\bar 1}-1}
@@ -402,8 +722,8 @@ h(z) = g(z)\cdot f(z)
 $$
 
 
-### Ejemplito usando los $\eta$
-Veamos un ejemplito simple con esto. Consideremos un sólo link (dos personas) y recibimos información de la persona $1$:
+#### Ejemplito con un sólo link
+Veamos un ejemplito simple con esto. Consideremos un sólo link (dos personas) y recibimos información de la persona 1. Modelamos esta información con los valore $\alpha_1 = 49$, $\alpha_{\bar 1} = 1$, de forma tal que $E[\theta_1|M_1] = 49/50 = 0.98$, $V[\theta_1|M_1] = 49/(51\cdot 50^2) \approx 3.8 \times 10^{-4}\approx 0.02^2$. Es decir, estamos MUY seguros de que $\theta_1$ está cerca de 0.98. Como priori mantenemos los valores de $\kappa = 22$ y $\gamma=10$.
 
 ```{r}
 gamma = 10
@@ -449,6 +769,41 @@ print(gL$gL1)
 print(gP$gL1)
 ```
 
+Poniendole un poco de números a estos gráficos, tenemos que el primer valor estimado para $\theta_1$ es $0.5 \pm 0.1$:
+
+```{r}
+mean(df0$t12+df0$t1n2)
+sd(df0$t12+df0$t1n2)
+```
+La medición, como dijimos previamente, nos da un valor de aproximadamente $0.98 \pm 0.02$:
+
+
+```{r}
+mean(dfL$t12+dfL$t1n2)
+sd(dfL$t12+dfL$t1n2)
+```
+
+Tras la actualización, tenemos un nuevo valor que combina ambas fuentes de información:
+
+```{r}
+mean(dfP$t12+dfP$t1n2)
+sd(dfP$t12+dfP$t1n2)
+```
+
+Nuestro estimando de $\theta_1$ aumenta a $0.84 \pm 0.04$, compatibilizando ambas fuentes de información. ¿Qué pasa con $\theta_2$?
+
+```{r}
+mean(df0$t12+df0$tn12)
+sd(df0$t12+df0$tn12)
+
+mean(dfL$t12+dfL$tn12)
+sd(dfL$t12+dfL$tn12)
+
+mean(dfP$t12+dfP$tn12)
+sd(dfP$t12+dfP$tn12)
+```
+Inicialmente el valor estimado $\theta_2$ es también $0.5 \pm 0.1$. La medición en sí misma no nos provee de información al respecto: $0.5\pm 0.3$. Sin embargo, gracias al vínculo establecido entre $\theta_1$ y $\theta_2$ a través de $\theta_{12}$ tenemos que el nuevo estimando de $\theta_2$ aumenta a $0.78\pm 0.08$.
+
 Segundo set de gráficos:
 ```{r}
 print(g0L$F)
@@ -459,11 +814,15 @@ print(g0P$G)
 
 ```
 
-### Ejemplo con dos links
 
-Repetimos el mismo modelo que presentamos antes y le agregamos la misma medición. Es decir, medimos que va a estar la persona $1$
+#### Ejemplo con dos links
+
+##### En el centro del vértice
+
+Repetimos el mismo modelo que presentamos antes y le agregamos la misma medición. Es decir, medimos que va a estar la persona 1. Esta persona está en el centro del vértice, con lo cual afecta directamente a las personas 2 y 3.
 
 ```{r}
+require(igraph)
 g = make_empty_graph(n=3,directed=FALSE)
 g = add_edges(g,c(1,2,1,3))
 plot(g)
@@ -472,8 +831,8 @@ X = as_adjacency_matrix(g,sparse = FALSE)
 Z = generate_state_vector(X)
 A = generate_constraint_matrix(X)
 P = generate_proyector(A)
-gamma = 2
-K = 4
+gamma = 10
+K = 22
 kappas = generate_kappas(Z,gamma = gamma,K=K)
 H = c(1,1,0,0,0,0)
 alfas = c(49,1)
@@ -501,6 +860,52 @@ colnames(df0) = paste('t',Z,sep='')
 colnames(dfL) = paste('t',Z,sep='')
 colnames(dfP) = paste('t',Z,sep='')
 ```
+
+Antes de ver los gráficos, exploremos qué ocurre a los valores medios y varianzas:
+
+Para $\theta_1$:
+
+```{r}
+mean(df0$t12+df0$t1n2)
+sd(df0$t12+df0$t1n2)
+
+mean(dfL$t12+dfL$t1n2)
+sd(dfL$t12+dfL$t1n2)
+
+mean(dfP$t12+dfP$t1n2)
+sd(dfP$t12+dfP$t1n2)
+```
+
+Lo que observamos comparando al caso anterior es que el aumento de la probabilidad es menor (es decir, aumenta menos $E[\theta_1]$). Esto se debe a que al estar conectado a más personas, la masa de probabilidad que debe mover es mayor. Esto lo podemos notar en la desviación estandar de $\theta_1$ en la priori.
+
+Para $\theta_2$:
+
+```{r}
+mean(df0$t12+df0$tn12)
+sd(df0$t12+df0$tn12)
+
+mean(dfL$t12+dfL$tn12)
+sd(dfL$t12+dfL$tn12)
+
+mean(dfP$t12+dfP$tn12)
+sd(dfP$t12+dfP$tn12)
+```
+
+Nuevamente, observamos un aumento en la probabilidad de $\theta_2$. Si bien es levemente menor que en el caso anterior, la diferencia es menos notable que para $\theta_1$. 
+
+Para $\theta_3$:
+
+```{r}
+mean(df0$t13+df0$t1n3)
+sd(df0$t13+df0$t1n3)
+
+mean(dfL$t13+dfL$t1n3)
+sd(dfL$t13+dfL$t1n3)
+
+mean(dfP$t13+dfP$t1n3)
+sd(dfP$t13+dfP$t1n3)
+```
+Como es de esperarse, el resultado para $\theta_3$ es análogo al de $\theta_2$.
 
 Armamos los gráficos
 ```{r}
@@ -552,3 +957,733 @@ print(ggL0P$F)
 print(ggL0P$G)
 print(ggL0P$H)
 ```
+
+
+##### En el borde del vértice
+
+En este caso vamos a medir sobre la persona 2. Esta persona está en el borde del vértice, con lo cual afecta directamente a la persona 1 e indirectamente a la persona 3.
+
+```{r}
+require(igraph)
+g = make_empty_graph(n=3,directed=FALSE)
+g = add_edges(g,c(1,2,1,3))
+plot(g)
+X = as_adjacency_matrix(g,sparse = FALSE)
+
+Z = generate_state_vector(X)
+A = generate_constraint_matrix(X)
+P = generate_proyector(A)
+gamma = 10
+K = 22
+kappas = generate_kappas(Z,gamma = gamma,K=K)
+H = c(1,0,1,0,0,0)
+alfas = c(49,1)
+params = list('H'=H,'alfas'=alfas,'kappas'=kappas,'K'=P)
+
+
+z0 = kappas[c(1:3,5:7)]/K
+initial = t(P)%*%z0
+density = density_eta
+samples0 = sampling(density = density,initial=initial,params=params,full.result = FALSE,scale=6e-2)
+
+initial = colMeans(samples0)
+density = density_posteriori_eta
+samplesP = sampling(density = density,initial=initial,params=params,full.result = FALSE,scale=6e-2)
+
+initial = colMeans(samples0)
+density = density_measure_eta
+samplesL = sampling(density = density,initial=initial,params=params,full.result = FALSE,scale=6e-2)
+
+df0 = as.data.frame(t(P%*%t(samples0)))
+dfL = as.data.frame(t(P%*%t(samplesL)))
+dfP = as.data.frame(t(P%*%t(samplesP)))
+
+colnames(df0) = paste('t',Z,sep='')
+colnames(dfL) = paste('t',Z,sep='')
+colnames(dfP) = paste('t',Z,sep='')
+```
+
+
+
+Antes de ver los gráficos, exploremos qué ocurre a los valores medios y varianzas:
+
+Para $\theta_2$:
+
+```{r}
+mean(df0$t12+df0$tn12)
+sd(df0$t12+df0$tn12)
+
+mean(dfL$t12+dfL$tn12)
+sd(dfL$t12+dfL$tn12)
+
+mean(dfP$t12+dfP$tn12)
+sd(dfP$t12+dfP$tn12)
+```
+
+Observamos un aumento en la probabilidad de $\theta_2$, similar al del primer ejemplo con un sólo link.
+
+
+Para $\theta_1$:
+
+```{r}
+mean(df0$t12+df0$t1n2)
+sd(df0$t12+df0$t1n2)
+
+mean(dfL$t12+dfL$t1n2)
+sd(dfL$t12+dfL$t1n2)
+
+mean(dfP$t12+dfP$t1n2)
+sd(dfP$t12+dfP$t1n2)
+```
+
+Lo que observamos comparando al caso anterior es que el aumento de la probabilidad es menor (es decir, aumenta menos $E[\theta_1]$). En este caso $\theta_1$ se ve tironeado por dos puntos: la persona 2 aumenta su verosimilitud de estar en el evento, mientras que de la persona 3 no nos llega nueva información por lo que hace de contrapeso.
+
+
+Para $\theta_3$:
+
+```{r}
+mean(df0$t13+df0$t1n3)
+sd(df0$t13+df0$t1n3)
+
+mean(dfL$t13+dfL$t1n3)
+sd(dfL$t13+dfL$t1n3)
+
+mean(dfP$t13+dfP$t1n3)
+sd(dfP$t13+dfP$t1n3)
+```
+
+En este caso nuevamente, si bien el efecto es más débil, vemos que se propaga hasta la persona 3 que queda igual a la persona 1.
+
+Armamos los gráficos
+```{r}
+ggL0 = make_ggmagic(df0)
+ggLL = make_ggmagic(dfL,gtitle = 'Medición')
+ggLP = make_ggmagic(dfP,gtitle = 'Post')
+ggL0L = make_ggmagic2(df0, dfL,gtitle2 = 'Medicion')
+ggL0P = make_ggmagic2(df0, dfP)
+```
+
+
+Primer set de gráficos
+```{r}
+ggL0$gL1
+ggLL$gL1
+ggLP$gL1
+```
+
+Segundo set de gráficos
+```{r}
+ggL0$gL2
+ggLL$gL2
+ggLP$gL2
+```
+
+Tercer set de gráficos
+
+```{r}
+ggL0$gL3
+ggLL$gL3
+ggLP$gL3
+```
+
+Cuarto set de gráficos
+
+```{r}
+print(ggL0P$A)
+print(ggL0P$B)
+print(ggL0P$C)
+print(ggL0P$D)
+print(ggL0P$E)
+
+```
+
+Quinto set de gráficos
+
+```{r}
+print(ggL0P$F)
+print(ggL0P$G)
+print(ggL0P$H)
+```
+
+
+
+
+
+##### Propagación en una cadena
+
+Para explorar como se propaga la información sobre una red sencilla, vamos a considerar una cadena en la cual la información la recibimos de la persona 1, ubicada en un extremo.
+
+```{r}
+require(igraph)
+gChains = lapply(3:15,function(len){
+  print(len)
+  g = make_lattice(dim=1,length=len,directed=FALSE)
+
+  X = as_adjacency_matrix(g,sparse = FALSE)
+  
+  Z = generate_state_vector(X)
+  A = generate_constraint_matrix(X)
+  P = generate_proyector(A)
+  gamma = 10
+  K = 22
+  kappas = generate_kappas(Z,gamma = gamma,K=K)
+  
+  z0 = generate_z0(kappas,K)
+  H = 0*z0
+  H[1:2] = 1
+  alfas = c(49,1)
+  params = list('H'=H,'alfas'=alfas,'kappas'=kappas,'K'=P)
+  
+  initial = t(P)%*%z0
+  density = density_posteriori_eta
+  samplesP = sampling(density = density,initial=initial,params=params,full.result = FALSE,scale=6e-2,nbatch = 1e6)
+  
+  medias = colMeans(samplesP)
+  medias = as.numeric(P%*%medias)
+  names(medias) = Z
+  tSingles = sapply(1:vcount(g),function(i){
+    ts = medias[grepl(i,Z) & !grepl(paste('n',i,sep=''),Z)]
+    sum(ts)/(length(ts)/2)
+  }) 
+  
+  V(g)$theta = tSingles
+  return(g)
+})
+
+for(g in gChains){
+  plot(g,vertex.color=gray(ifelse(V(g)$theta>=0.5,(V(g)$theta-0.5)/(0.5),0)),layout=cbind(1:vcount(g),1:vcount(g)))
+}
+
+```
+
+
+Antes de ver los gráficos, exploremos qué ocurre a los valores medios y varianzas:
+
+Para $\theta_2$:
+
+```{r}
+mean(df0$t12+df0$tn12)
+sd(df0$t12+df0$tn12)
+
+mean(dfL$t12+dfL$tn12)
+sd(dfL$t12+dfL$tn12)
+
+mean(dfP$t12+dfP$tn12)
+sd(dfP$t12+dfP$tn12)
+```
+
+Observamos un aumento en la probabilidad de $\theta_2$, similar al del primer ejemplo con un sólo link.
+
+
+Para $\theta_1$:
+
+```{r}
+mean(df0$t12+df0$t1n2)
+sd(df0$t12+df0$t1n2)
+
+mean(dfL$t12+dfL$t1n2)
+sd(dfL$t12+dfL$t1n2)
+
+mean(dfP$t12+dfP$t1n2)
+sd(dfP$t12+dfP$t1n2)
+```
+
+Lo que observamos comparando al caso anterior es que el aumento de la probabilidad es menor (es decir, aumenta menos $E[\theta_1]$). En este caso $\theta_1$ se ve tironeado por dos puntos: la persona 2 aumenta su verosimilitud de estar en el evento, mientras que de la persona 3 no nos llega nueva información por lo que hace de contrapeso.
+
+
+Para $\theta_3$:
+
+```{r}
+mean(df0$t13+df0$t1n3)
+sd(df0$t13+df0$t1n3)
+
+mean(dfL$t13+dfL$t1n3)
+sd(dfL$t13+dfL$t1n3)
+
+mean(dfP$t13+dfP$t1n3)
+sd(dfP$t13+dfP$t1n3)
+```
+
+En este caso nuevamente, si bien el efecto es más débil, vemos que se propaga hasta la persona 3 que queda igual a la persona 1.
+
+Armamos los gráficos
+```{r}
+ggL0 = make_ggmagic(df0)
+ggLL = make_ggmagic(dfL,gtitle = 'Medición')
+ggLP = make_ggmagic(dfP,gtitle = 'Post')
+ggL0L = make_ggmagic2(df0, dfL,gtitle2 = 'Medicion')
+ggL0P = make_ggmagic2(df0, dfP)
+```
+
+
+Primer set de gráficos
+```{r}
+ggL0$gL1
+ggLL$gL1
+ggLP$gL1
+```
+
+Segundo set de gráficos
+```{r}
+ggL0$gL2
+ggLL$gL2
+ggLP$gL2
+```
+
+Tercer set de gráficos
+
+```{r}
+ggL0$gL3
+ggLL$gL3
+ggLP$gL3
+```
+
+Cuarto set de gráficos
+
+```{r}
+print(ggL0P$A)
+print(ggL0P$B)
+print(ggL0P$C)
+print(ggL0P$D)
+print(ggL0P$E)
+
+```
+
+Quinto set de gráficos
+
+```{r}
+print(ggL0P$F)
+print(ggL0P$G)
+print(ggL0P$H)
+```
+
+### Condicionando sobre una de las personas
+
+En el ejemplo anterior vimos el efecto de incorporar información externa referida directamente a los valores de $\theta_{r}$. Este proceso involucra la imagen mental de que un agente externo nos aporta información nueva sobre los valores de los $\theta$ (por ejemplo, alguien sabe con cierta probabilidad que la persona r está en el evento). 
+
+En este apartado la búsqueda será distinta. En vez de preguntarnos por lo $\theta$, y recibir información sobre ellos, exploraremos como condicionar sobre el hecho de que una persona esté presente en el evento. 
+
+#### Volviendo sobre dos personas
+
+Consideremos por un momento que sólo hay dos personas (1 y 2), cuya distribución de probabilidad conjunta está dada por $z_{12}=(\theta_{12},\theta_{1 \bar 2},\theta_{\bar 1 2})$. Partimos de que 
+
+$$
+\begin{align}
+P(12) = \theta_{12} \\
+P(1) = \theta_{12} + \theta_{1 \bar 2}
+\end{align}
+$$
+
+Entonces, para calcular $P(2|1)$ hacemos
+
+$$
+\begin{align}
+P(2|1) = \frac{P(12)}{P(1)} = \frac{\theta_{12}}{\theta_{12} + \theta_{1 \bar 2}} = \theta_{2|1} \\
+P(\bar 2 | 1) = \frac{P(1 \bar 2)}{P(1)} = \frac{\theta_{1 \bar 2}}{\theta_{12} + \theta_{1 \bar 2}} = \theta_{\bar 2|1} \\
+\end{align}
+$$
+
+Es decir que la distribución condicional la obtenemos a partir de la distribución original. Lo que tenemos que hacer es realizar operaciones sobre los $\theta_{rs}$.
+
+Formalmente, si quisieramos obtener la distribución exacta para $\theta_{2|1}$, tendríamos que usar que
+
+$$
+\begin{align}
+f_{12}(z_{12})  &= \frac{\Gamma(\kappa)}{\Gamma(\kappa_{12}) \Gamma(\kappa_{1 \bar 2}) \Gamma(\kappa_{\bar 1 2}) \Gamma(\kappa_{\bar 1 \bar 2})} \theta_{12}^{\kappa_{12}-1} \theta_{1 \bar 2}^{\kappa_{1\bar 2}-1} \theta_{\bar 1 2}^{\kappa_{\bar 1 2}-1} (1-\theta_{12}-\theta_{1 \bar 2}-\theta_{\bar 1 2})^{\kappa_{\bar 1 \bar 2}-1} \\
+f_{2|1}(\theta_{2|1}) &= \int dz_{12} \  \delta(\theta_{2|1} - \frac{\theta_{12}}{\theta_{12}+\theta_{1\bar2}}) f_{12}(z_{12})
+\end{align}
+$$
+
+En este caso, en vez de realizar este cálculo, lo que haremos será computar muestras de $f_{12}$ y usarlas para calcular $\theta_{2|1}$.
+
+
+```{r}
+require(igraph)
+g = make_empty_graph(n=2,directed=FALSE)
+g = add_edges(g,c(1,2))
+plot(g)
+X = as_adjacency_matrix(g,sparse = FALSE)
+
+Z = generate_state_vector(X)
+gamma = 10
+K = 22
+kappas = generate_kappas(Z,gamma = gamma,K=K)
+params = list('kappas'=kappas)
+
+
+z0 = generate_z0(kappas,K)
+initial = z0
+density = density_comb
+samples0 = sampling(density = density,initial=initial,params=params,full.result = FALSE,scale=6e-2)
+
+
+
+df0 = as.data.frame(samples0)
+colnames(df0) = paste('t',Z,sep='')
+
+df0$t2g1 = df0$t12/(df0$t12+df0$t1n2)
+ggplot(data=df0,mapping=aes(x=t2g1,y=..density..)) + geom_histogram()
+
+```
+
+Lo que vemos acá es que al condicionar sobre la persona 1, la persona 2 tiene una densidad concentrada cerca de uno. Esto ocurre porque la operación de marginalizar recorta todo lo asociado a $\bar 1$. Al quedarnos sólo con los $\theta$ asociados a $1$, y siendo que $\theta_{12}\gg \theta_{1\bar2}$ (dado que nuestra priori es que estarán juntos), el resultado es una distribución para $\theta_{2|1}$ (`t2g1`) concentrada en 1. Si la pensaramos como una distribución beta, tendría los parámetros:
+
+```{r}
+esp = mean(df0$t2g1)
+vari = var(df0$t2g1)
+alfa = esp*(1-esp)/vari-1
+alfa1 = esp*alfa
+alfa2 = (1-esp)*alfa
+print(c(alfa1,alfa2))
+print(kappas)
+```
+
+Numéricamente, este resultado nos sugiere que la distribución que obtenemos es equivalente a fijar $\kappa_{\bar 1 2} = \kappa_{\bar 1 \bar 2} = 0$. Esta hipótesis necesitaría ser explorada más detalladamente.
+
+#### Considerando tres personas, en una linea recta
+
+Ahora que ya sabemos qué hacer para condicionar cuando dos personas está vinculadas directamente, veamos qué ocurre cuando condicionamos sobre la presencia de la persona 1, sobre las personas 2 y 3.
+
+```{r}
+require(igraph)
+make_empty_graph(n=3,directed=FALSE) %>% add_edges(edges=c(1,2,2,3)) %>% plot()
+```
+
+Recordemos que en este caso tenemos como vector de probabilidades a $z=(z_{12},z_{23}) = (\theta_{12},\theta_{1 \bar 2}, \theta_{\bar 1 2},\theta_{23},\theta_{2 \bar 3}, \theta_{\bar 2 3})$. Al considerar esta red, estamos suponiendo que $P(3|21) = P(3|2)$ y que $P(1|23)=P(1|2)$. Esto significa que condicionando en la presencia de la persona 2, la presencia de la persona 1 es irrelevante para la 3 y viceversa. A partir del ejemplo anterior ya sabemos que
+
+$$
+P(2|1) = \frac{P(12)}{P(1)} = \frac{\theta_{12}}{\theta_{12} + \theta_{1 \bar 2}}
+$$
+
+En este caso, al condicionar sobre la presencia de la persona 1, lo que nos queda es un link, que va a estar descripto por $z_{23|1}=(\theta_{23|1},\theta_{2 \bar 3|1},\theta_{\bar 2 3|1})$. Nuestro objetivo entonces es construir a $z_{23|1}$ a partir de $z_{12}$ y $z_{23}$. Bajo la suposición de la independencia condicional tenemos que
+
+$$
+\begin{align}
+P(23|1) &= P(3|21)P(2|1) = P(3|2)P(2|1) = P(3|2)\frac{P(2)}{P(2)}P(2|1) = P(23) \frac{P(2|1)}{P(2)} \\
+&= \theta_{23} \frac{\theta_{2|1}}{\theta_2} =   \frac{\theta_{23}\theta_{12}}{(\theta_{12}+\theta_{1 \bar 2})(\theta_{12}+\theta_{\bar 1 2})}
+\end{align}
+$$
+
+De forma similar, podemos escribir las ecuaciones para los tres elementos de $z_{23|1}$:
+
+$$
+\begin{align}
+\theta_{23|1} = \frac{\theta_{23}\theta_{12}}{(\theta_{12}+\theta_{1 \bar 2})(\theta_{12}+\theta_{\bar 1 2})} = \theta_{23} \frac{\theta_{12}}{\theta_1 \theta_2} \\
+\theta_{2 \bar 3|1} = \frac{\theta_{2 \bar 3}\theta_{12}}{(\theta_{12}+\theta_{1 \bar 2})(\theta_{12}+\theta_{\bar 1 2})} = \theta_{2 \bar 3} \frac{\theta_{12}}{\theta_1 \theta_2} \\
+\theta_{\bar 2 3|1} = \frac{\theta_{\bar 2  3}\theta_{1 \bar2}}{(\theta_{12}+\theta_{1 \bar 2})(\theta_{1 \bar 2}+\theta_{\bar 1 \bar 2})} = \theta_{\bar 2 3} \frac{\theta_{1 \bar 2}}{\theta_1 (1- \theta_2)} \\
+\end{align}
+$$
+
+Nuevamente, para construir nuestra función de probabilidad $f_{23|1}(z_{23|1})$ tendríamos que integrar una delta de Dirac sobre estos valores. En vez de eso, calculemos la distribución de estos parámetros numéricamente.
+
+
+```{r}
+require(igraph)
+g = make_empty_graph(n=3,directed=FALSE)
+g = add_edges(g,c(1,2,2,3))
+plot(g)
+X = as_adjacency_matrix(g,sparse = FALSE)
+A = generate_constraint_matrix(X)
+P = generate_proyector(A)
+
+Z = generate_state_vector(X)
+gamma = 10
+K = 22
+kappas = generate_kappas(Z,gamma = gamma,K=K)
+
+params = list('kappas'=kappas,'K'=P)
+
+z0 = generate_z0(kappas,K)
+initial = t(P)%*%z0
+density = density_eta
+samples0 = sampling(density = density,initial=initial,params=params,full.result = FALSE,scale=6e-2,nbatch = 1e6)
+
+df0 = as.data.frame(t(P%*%t(samples0)))
+colnames(df0) = paste('t',Z,sep='')
+
+df0$t1 = df0$t12+df0$t1n2
+df0$t2 = df0$t12+df0$tn12
+df0$t23g1 = df0$t23*df0$t12/(df0$t1*df0$t2)
+df0$t2n3g1 = df0$t2n3*df0$t12/(df0$t1*df0$t2)
+df0$tn23g1 = df0$tn23*df0$t1n2/(df0$t1*(1-df0$t2))
+
+ggplot(data=df0,mapping=aes(x=t23+tn23,y=..density..)) + geom_histogram() + geom_vline(xintercept = mean(df0$t23+df0$tn23)) + xlim(c(0,1)) + ggplot(data=df0,mapping=aes(x=t23g1+tn23g1,y=..density..)) + geom_histogram() + geom_vline(xintercept = mean(df0$t23g1+df0$tn23g1)) + xlim(c(0,1))
+
+ggplot(data=df0,mapping=aes(x=t23+t2n3,y=..density..)) + geom_histogram() + geom_vline(xintercept = mean(df0$t23+df0$t2n3)) + xlim(c(0,1)) + ggplot(data=df0,mapping=aes(x=t23g1+t2n3g1,y=..density..)) + geom_histogram() + geom_vline(xintercept = mean(df0$t23g1+df0$t2n3g1)) + xlim(c(0,1))
+
+paste('t2->t2g1:',paste(round(mean(df0$t23+df0$t2n3),2),round(mean(df0$t23g1+df0$t2n3g1),2),sep='->'))
+paste('t3->t3g1:',paste(round(mean(df0$t23+df0$tn23),2),round(mean(df0$t23g1+df0$tn23g1),2),sep='->'))
+```
+
+De estas distribuciones vemos que el efecto de la presencia de la persona 1 se atenua a medida que nos alejamos de ella en la red.  Mientras que $\theta_2=0.5$ pasa a $\theta_{2|1}=0.91$, $\theta_3 = 0.5$ pasa a $\theta_{3|1}=0.84$.
+
+
+#### Considerando cuatro personas en una cadena
+
+Para identificar como se propaga el condicionamiento en una cadena más larga, estudiemos una cadena formada por cuatro personas.
+
+En este caso, nuestro vector de probabilidades está dado por $z=(z_{12},z_{23},z_{34})$. Luego de condicionar, nuestro nuevo vector estará dado por  $z_{|1} =(z_{23|1},z_{34|1})$. El vector $z_{23|1}$ ya aprendimos como construirlo. Veamos como construimos el vector $z_{34|1}$ en función el vector $z_{23|1}$. Para eso necesitamos construir $P(34|1)$. Veamos:
+
+$$
+P(34|1) = P(4|31)P(3|1) = P(4|3)P(3|1) = P(34) \frac{P(3|1)}{P(3)} = \theta_{34} \frac{\theta_{3|1}}{\theta_3} = \theta_{34|1}
+$$
+
+De forma similar, tenemos que
+
+$$
+\begin{align}
+\theta_{34|1} = \theta_{34} \frac{\theta_{3|1}}{\theta_3} \\
+\theta_{3 \bar 4|1} = \theta_{3 \bar 4} \frac{\theta_{3|1}}{\theta_3} \\
+\theta_{\bar 3 4|1} = \theta_{\bar 3 4} \frac{\theta_{\bar 3|1}}{\theta_{\bar 3}} \\
+\end{align}
+$$
+En general, vemos que si lo que estamos siguiendo es una cadena lineal desde el par rs hasta la persona 1, tendremos que actualizar haciendo
+
+$$
+\theta_{rs|1} = \theta_{rs} \frac{\theta_{r|1}}{\theta_r}
+$$
+donde la persona r es la que está más cerca de la persona 1.
+
+Veamos como resulta en este ejemplo la difuminación a lo largo de la cadena.
+
+```{r}
+require(igraph)
+require(ggplot2)
+require(patchwork)
+source('repo.R')
+g = make_empty_graph(n=4,directed=FALSE)
+g = add_edges(g,c(1,2,2,3,3,4))
+plot(g)
+X = as_adjacency_matrix(g,sparse = FALSE)
+A = generate_constraint_matrix(X)
+P = generate_proyector(A)
+
+Z = generate_state_vector(X)
+gamma = 10
+K = 22
+kappas = generate_kappas(Z,gamma = gamma,K=K)
+
+params = list('kappas'=kappas,'K'=P)
+
+z0 = generate_z0(kappas,K)
+initial = t(P)%*%z0
+density = density_eta
+samples0 = sampling(density = density,initial=initial,params=params,full.result = FALSE,scale=6e-2,nbatch = 1e6)
+
+df0 = as.data.frame(t(P%*%t(samples0)))
+colnames(df0) = paste('t',Z,sep='')
+
+df0$t1 = df0$t12+df0$t1n2
+df0$t2 = df0$t12+df0$tn12
+df0$t3 = df0$t34+df0$t3n4
+df0$t4 = df0$t34+df0$tn34
+
+df0$t2g1 = df0$t12/df0$t1
+
+df0$t23g1 = df0$t23*df0$t2g1/df0$t2
+df0$t2n3g1 = df0$t2n3*df0$t2g1/df0$t2
+df0$tn23g1 = df0$tn23*(1-df0$t2g1)/(1-df0$t2)
+
+df0$t3g1 = df0$t23g1+df0$tn23g1
+
+df0$t34g1 = df0$t34*df0$t3g1/df0$t3
+df0$t3n4g1 = df0$t2n3*df0$t3g1/df0$t3
+df0$tn34g1 = df0$tn23*(1-df0$t3g1)/(1-df0$t3)
+
+df0$t4g1 = df0$t34g1+df0$tn34g1
+
+
+ggplot(data=df0,mapping=aes(x=t2,y=..density..)) + geom_histogram() + geom_vline(xintercept = mean(df0$t2)) + xlim(c(0,1)) + ggplot(data=df0,mapping=aes(x=t2g1,y=..density..)) + geom_histogram() + geom_vline(xintercept = mean(df0$t2g1)) + xlim(c(0,1))
+
+ggplot(data=df0,mapping=aes(x=t3,y=..density..)) + geom_histogram() + geom_vline(xintercept = mean(df0$t3)) + xlim(c(0,1)) + ggplot(data=df0,mapping=aes(x=t3g1,y=..density..)) + geom_histogram() + geom_vline(xintercept = mean(df0$t3g1)) + xlim(c(0,1))
+
+ggplot(data=df0,mapping=aes(x=t4,y=..density..)) + geom_histogram() + geom_vline(xintercept = mean(df0$t4)) + xlim(c(0,1)) + ggplot(data=df0,mapping=aes(x=t4g1,y=..density..)) + geom_histogram() + geom_vline(xintercept = mean(df0$t4g1)) + xlim(c(0,1))
+
+
+paste('t2->t2g1:',paste(round(mean(df0$t2),2),round(mean(df0$t2g1),2),sep='->'))
+paste('t3->t3g1:',paste(round(mean(df0$t3),2),round(mean(df0$t3g1),2),sep='->'))
+paste('t4->t4g1:',paste(round(mean(df0$t4),2),round(mean(df0$t4g1),2),sep='->'))
+```
+
+
+Veamos un ejemplo idéntico más, pero con más personas:
+
+```{r}
+require(igraph)
+require(ggplot2)
+require(patchwork)
+source('repo.R')
+g = make_empty_graph(n=10,directed=FALSE)
+g = add_edges(g,c(1,2,2,3,3,4,4,5,5,6,6,7,7,8,8,9,9,10))
+plot(g)
+X = as_adjacency_matrix(g,sparse = FALSE)
+A = generate_constraint_matrix(X)
+P = generate_proyector(A)
+
+Z = generate_state_vector(X)
+gamma = 10
+K = 22
+kappas = generate_kappas(Z,gamma = gamma,K=K)
+
+params = list('kappas'=kappas,'K'=P)
+
+z0 = generate_z0(kappas,K)
+initial = t(P)%*%z0
+density = density_eta
+samples0 = sampling(density = density,initial=initial,params=params,full.result = FALSE,scale=6e-2,nbatch = 1e6)
+
+df0 = as.data.frame(t(P%*%t(samples0)))
+colnames(df0) = paste('t',Z,sep='')
+
+df0$t1 = df0$t12+df0$t1n2
+df0$t2 = df0$t12+df0$tn12
+df0$t3 = df0$t34+df0$t3n4
+df0$t4 = df0$t34+df0$tn34
+df0$t5 = df0$t45+df0$tn45
+df0$t6 = df0$t56+df0$tn56
+df0$t7 = df0$t67+df0$tn67
+df0$t8 = df0$t78+df0$tn78
+df0$t9 = df0$t89+df0$tn89
+df0$t10 = df0$t910+df0$tn910
+
+df0$t2g1 = df0$t12/df0$t1
+
+df0$t23g1 = df0$t23*df0$t2g1/df0$t2
+df0$t2n3g1 = df0$t2n3*df0$t2g1/df0$t2
+df0$tn23g1 = df0$tn23*(1-df0$t2g1)/(1-df0$t2)
+
+df0$t3g1 = df0$t23g1+df0$tn23g1
+
+df0$t34g1 = df0$t34*df0$t3g1/df0$t3
+df0$t3n4g1 = df0$t2n3*df0$t3g1/df0$t3
+df0$tn34g1 = df0$tn23*(1-df0$t3g1)/(1-df0$t3)
+
+df0$t4g1 = df0$t34g1+df0$tn34g1
+
+df0$t45g1 = df0$t45*df0$t4g1/df0$t4
+df0$t4n5g1 = df0$t4n5*df0$t4g1/df0$t4
+df0$tn45g1 = df0$tn45*(1-df0$t4g1)/(1-df0$t4)
+
+df0$t5g1 = df0$t45g1+df0$tn45g1
+
+df0$t56g1 = df0$t56*df0$t5g1/df0$t5
+df0$t5n6g1 = df0$t5n6*df0$t5g1/df0$t5
+df0$tn56g1 = df0$tn56*(1-df0$t5g1)/(1-df0$t5)
+
+df0$t6g1 = df0$t56g1+df0$tn56g1
+
+df0$t67g1 = df0$t67*df0$t6g1/df0$t6
+df0$t6n7g1 = df0$t6n7*df0$t6g1/df0$t6
+df0$tn67g1 = df0$tn67*(1-df0$t6g1)/(1-df0$t6)
+
+df0$t7g1 = df0$t67g1+df0$tn67g1
+
+df0$t78g1 = df0$t78*df0$t7g1/df0$t7
+df0$t7n8g1 = df0$t7n8*df0$t7g1/df0$t7
+df0$tn78g1 = df0$tn78*(1-df0$t7g1)/(1-df0$t7)
+
+df0$t8g1 = df0$t78g1+df0$tn78g1
+
+df0$t89g1 = df0$t89*df0$t8g1/df0$t8
+df0$t8n9g1 = df0$t8n9*df0$t8g1/df0$t8
+df0$tn89g1 = df0$tn89*(1-df0$t8g1)/(1-df0$t8)
+
+df0$t9g1 = df0$t89g1+df0$tn89g1
+
+df0$t910g1 = df0$t910*df0$t9g1/df0$t9
+df0$t9n10g1 = df0$t9n10*df0$t9g1/df0$t9
+df0$tn910g1 = df0$tn910*(1-df0$t9g1)/(1-df0$t9)
+
+df0$t10g1 = df0$t910g1+df0$tn910g1
+
+
+
+
+ggplot(data=df0,mapping=aes(x=t2,y=..density..)) + geom_histogram() + geom_vline(xintercept = mean(df0$t2)) + xlim(c(0,1)) + ggplot(data=df0,mapping=aes(x=t2g1,y=..density..)) + geom_histogram() + geom_vline(xintercept = mean(df0$t2g1)) + xlim(c(0,1))
+
+ggplot(data=df0,mapping=aes(x=t3,y=..density..)) + geom_histogram() + geom_vline(xintercept = mean(df0$t3)) + xlim(c(0,1)) + ggplot(data=df0,mapping=aes(x=t3g1,y=..density..)) + geom_histogram() + geom_vline(xintercept = mean(df0$t3g1)) + xlim(c(0,1))
+
+ggplot(data=df0,mapping=aes(x=t4,y=..density..)) + geom_histogram() + geom_vline(xintercept = mean(df0$t4)) + xlim(c(0,1)) + ggplot(data=df0,mapping=aes(x=t4g1,y=..density..)) + geom_histogram() + geom_vline(xintercept = mean(df0$t4g1)) + xlim(c(0,1))
+
+ggplot(data=df0,mapping=aes(x=t5,y=..density..)) + geom_histogram() + geom_vline(xintercept = mean(df0$t5)) + xlim(c(0,1)) + ggplot(data=df0,mapping=aes(x=t5g1,y=..density..)) + geom_histogram() + geom_vline(xintercept = mean(df0$t5g1)) + xlim(c(0,1))
+
+ggplot(data=df0,mapping=aes(x=t6,y=..density..)) + geom_histogram() + geom_vline(xintercept = mean(df0$t6)) + xlim(c(0,1)) + ggplot(data=df0,mapping=aes(x=t6g1,y=..density..)) + geom_histogram() + geom_vline(xintercept = mean(df0$t6g1)) + xlim(c(0,1))
+
+ggplot(data=df0,mapping=aes(x=t4,y=..density..)) + geom_histogram() + geom_vline(xintercept = mean(df0$t7)) + xlim(c(0,1)) + ggplot(data=df0,mapping=aes(x=t7g1,y=..density..)) + geom_histogram() + geom_vline(xintercept = mean(df0$t7g1)) + xlim(c(0,1))
+
+ggplot(data=df0,mapping=aes(x=t8,y=..density..)) + geom_histogram() + geom_vline(xintercept = mean(df0$t8)) + xlim(c(0,1)) + ggplot(data=df0,mapping=aes(x=t8g1,y=..density..)) + geom_histogram() + geom_vline(xintercept = mean(df0$t8g1)) + xlim(c(0,1))
+
+ggplot(data=df0,mapping=aes(x=t9,y=..density..)) + geom_histogram() + geom_vline(xintercept = mean(df0$t9)) + xlim(c(0,1)) + ggplot(data=df0,mapping=aes(x=t9g1,y=..density..)) + geom_histogram() + geom_vline(xintercept = mean(df0$t9g1)) + xlim(c(0,1))
+
+ggplot(data=df0,mapping=aes(x=t10,y=..density..)) + geom_histogram() + geom_vline(xintercept = mean(df0$t10)) + xlim(c(0,1)) + ggplot(data=df0,mapping=aes(x=t10g1,y=..density..)) + geom_histogram() + geom_vline(xintercept = mean(df0$t10g1)) + xlim(c(0,1))
+
+
+paste('t2->t2g1:',paste(round(mean(df0$t2),2),round(mean(df0$t2g1),2),sep='->'))
+paste('t3->t3g1:',paste(round(mean(df0$t3),2),round(mean(df0$t3g1),2),sep='->'))
+paste('t4->t4g1:',paste(round(mean(df0$t4),2),round(mean(df0$t4g1),2),sep='->'))
+paste('t5->t5g1:',paste(round(mean(df0$t5),2),round(mean(df0$t5g1),2),sep='->'))
+paste('t6->t6g1:',paste(round(mean(df0$t6),2),round(mean(df0$t6g1),2),sep='->'))
+paste('t7->t7g1:',paste(round(mean(df0$t7),2),round(mean(df0$t7g1),2),sep='->'))
+paste('t8->t8g1:',paste(round(mean(df0$t8),2),round(mean(df0$t8g1),2),sep='->'))
+paste('t9->t9g1:',paste(round(mean(df0$t9),2),round(mean(df0$t9g1),2),sep='->'))
+paste('t10->t10g1:',paste(round(mean(df0$t10),2),round(mean(df0$t10g1),2),sep='->'))
+```
+
+¿Cómo cambia el efecto conforme nos alejamos? Una forma de visualizarlo (más allá de observar directamente las distribuciones) es graficar la el cociente de probabilidades en función de la distancia.
+
+```{r}
+
+m0 = sapply(2:10,function(i) mean(df0[,paste('t',i,sep='')]))
+m1 = sapply(2:10,function(i) mean(df0[,paste('t',i,'g1',sep='')]))
+plot(m0,ylim=c(0,1),type='l')
+lines(m1,ylim=c(0,1),col='red')
+
+plot(m0/(1-m0),ylim=c(10^-1,10),log='yx')
+points(m1/(1-m1),ylim=c(0,1),col='red')
+abline(a=1,b=-1)
+
+
+```
+
+Estos gráficos nos sugieren que la esperanza de las odds $O(r|1) = P(r|1)/(1-P(r|1))$ decrecen como una ley de potencia con la distancia $E[O(r|1)] \sim a^{-d(r,1)}$.
+
+
+#### El tríangulo, una vez más
+
+A diferencia de los ejemplos estilo _cadena_ que vimos recién, donde teníamos una relación de independencia condicional ($P(123) = P(3|2)P(2|1) P(1)$), en el tríangulo esta relación no se sostiene. 
+
+Esto es debido a qué en el triángulo tenemos relaciones entre todos los elementos. Si intentaramos resolverlo a igual que antes, encontraríamos:
+
+$$
+\begin{align}
+P(2|1) = \frac{\theta_{12}}{\theta_1} \\
+P(3|1) = \frac{\theta_{13}}{\theta_1} \\
+P(23|1) = P(2|31) P(3|1) \neq P(2|3) P(3|1) \\
+P(23|1) = P(3|21) P(2|1) \neq P(3|2) P(2|1) \\
+\end{align}
+$$
+
+El problema aparece porque no podemos aproximar $P(3|21) \approx P(3|2$. Veo dos posibles soluciones a esto:
+
+* Calcular de alguna forma $P(r|sq)$.
+* Calcular directamente $P(rs|q)$.
+
+Si tuvieramos una herramienta para condicionar dos veces, podríamos usar la primer opción. La segunda no es claro como la implementaríamos.
+
+Pensando en la primer opción, tenemos que $P(3|21) = P(23|1)/P(2|1)$, con lo cual para poder condicionar sobre ambos necesitamos esa piecita extra de información.
+
+Pensando en la segunda opción, podemos imaginar por un momento que conocemos la distribución de a tres personas $P(123),P(12\bar3),\dots$. Si conocieramos esta distribución, podríamos marginalizar simplemente haciendo
+
+$$
+P(23|1) = \frac{P(123)}{P(1)} = \frac{\theta_{123}}{\theta_1}
+$$
+
+El problema es que con la información que estamos trabajando, no tenemos conocimiento de cuál es el valor de $\theta_{123}$. Lo único que conocemos son sus marginales. Recordemos que tenemos la relación
+
+$$
+\left[ \begin{array}{c} \theta_{12} \\ \theta_{1 \bar 2} \\ \theta_{\bar 1 2} \\ \theta_{13} \\ \theta_{1 \bar 3} \\ \theta_{\bar 1 3} \\ \theta_{23} \\ \theta_{2 \bar 3} \\ \theta_{\bar 2 3} \end{array} \right]
+=
+\left[ \begin{array}{c} \theta_{123} \\ \theta_{1 2 \bar 3} \\ \theta_{1 \bar 2 3} \\ \theta_{1\bar 2 \bar 3} \\ \theta_{\bar123} \\ \theta_{\bar 1 2 \bar 3} \\ \theta_{\bar 1 \bar 2 3} \\  \end{array} \right]
+
+$$
+

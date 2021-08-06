@@ -5,12 +5,17 @@ generate_state_vector = function(X){
   links = which(X>0,arr.ind = TRUE)
   links = links[links[,1]<links[,2],]
   Z = NULL
-  for(k in 1:nrow(links)){
-    ij = paste(c('','','n'),paste(paste(links[k,1],c('','n',''),sep=''),links[k,2],sep=''),sep='')
+  if(length(nrow(links))>0){
+    for(k in 1:nrow(links)){
+      ij = paste(c('','','n'),paste(paste(links[k,1],c('','n',''),sep=''),links[k,2],sep=''),sep='')
+      Z = c(Z,ij)
+    }
+  }else{
+    ij = paste(c('','','n'),paste(paste(links[1],c('','n',''),sep=''),links[2],sep=''),sep='')
     Z = c(Z,ij)
   }
   isols = which(rowSums(X)==0)
-  Z = c(Z,isols)
+  Z = c(Z,isols)  
   return(Z)
 }
 
@@ -82,6 +87,13 @@ proyect = function(z,K){
   coef = t(K)%*%t(z)
   z_ = t(K%*%coef)
   return(z_)
+}
+
+generate_z0 = function(kappas,kappa_sum){
+  ies = 1:length(kappas)
+  ies = ies[ies%%4!=0]
+  z0 = kappas[ies]/kappa_sum
+  return(z0)
 }
 
 ###########################################
@@ -216,6 +228,8 @@ sampling = function(density,initial,params,nbatch=1e5,burnin=1e5,scale=1e-1,full
 ###### OTHER
 ####################################################
 make_ggmagic = function(df,gtitle='Priori'){
+  require(ggplot2)
+  require(patchwork)
   gg12 = ggplot(data=df,aes(x=t12,y=t1n2))+ ggtitle(label=gtitle) + geom_bin2d(show.legend=FALSE) + xlim(c(0,1)) + ylim(c(0,1)) 
   gg13 = ggplot(data=df,aes(x=t12,y=tn12))+ ggtitle(label=gtitle) + geom_bin2d(show.legend=FALSE) + xlim(c(0,1)) + ylim(c(0,1)) + theme(legend.position = c(0.1,.7))
   gg23 = ggplot(data=df,aes(x=t1n2,y=tn12))+ ggtitle(label=gtitle) + geom_bin2d(show.legend=FALSE) + xlim(c(0,1)) + ylim(c(0,1)) + theme(legend.position = c(0.1,.7))
@@ -245,10 +259,18 @@ make_ggmagic = function(df,gtitle='Priori'){
   ggF = ggplot(data=df,aes(x=t13+tn13,y=..density..))+ ggtitle(label=gtitle) + geom_histogram() + xlim(c(0,1))  #+ ylim(c(0,1))
   gL4 = (ggD+ggE+ggF)/(ggA+ggB+ggC)
   
-  return(list('gL1'=gL1,'gL2'=gL2,'gL3'=gL3,'gL4'=gL4))
+  ggA = ggplot(data=df,aes(x=1-t1n2-tn12,y=..density..))+ ggtitle(label=gtitle) + geom_histogram() + xlim(c(0,1)) + xlab('t12 + tn1n2')  #+ ylim(c(0,1))
+  ggB = ggplot(data=df,aes(x=1-tn12-t1n2,y=tn12+t1n2))+ ggtitle(label=gtitle) + geom_bin2d(show.legend=FALSE) + xlim(c(0,1)) + ylim(c(0,1)) + theme(legend.position = c(0.1,.7)) + xlab('t12 + tn1n2')
+  ggC = ggplot(data=df,aes(x=1-t1n3-tn13,y=..density..))+ ggtitle(label=gtitle) + geom_histogram() + xlim(c(0,1)) + xlab('t13 + tn1n3')  #+ ylim(c(0,1))
+  ggD = ggplot(data=df,aes(x=1-tn13-t1n3,y=tn13+t1n3))+ ggtitle(label=gtitle) + geom_bin2d(show.legend=FALSE) + xlim(c(0,1)) + ylim(c(0,1)) + theme(legend.position = c(0.1,.7)) + xlab('t13 + tn1n3')
+  gL5 = ggA+ggB+ggC+ggD
+  
+  return(list('gL1'=gL1,'gL2'=gL2,'gL3'=gL3,'gL4'=gL4,'gL5'=gL5))
 }
 
 make_ggmagic2 = function(df,dfP,gtitle1='Priori',gtitle2='Post'){
+  require(patchwork)
+  require(ggplot2)
   A = (ggplot(data=df,aes(x=t12+t1n2,y=t13+t1n3))+ ggtitle(label=gtitle1) + geom_bin2d(show.legend=FALSE) + xlim(c(0,1)) + ylim(c(0,1)) ) + (ggplot(data=dfP,aes(x=t12+t1n2,y=t13+t1n3))+ ggtitle(label=gtitle2) + geom_bin2d(show.legend=FALSE) + xlim(c(0,1)) + ylim(c(0,1)) )
   B = (ggplot(data=df,aes(x=t12,y=t13))+ ggtitle(label=gtitle1) + geom_bin2d(show.legend=FALSE) + xlim(c(0,1)) + ylim(c(0,1)) ) + (ggplot(data=dfP,aes(x=t12,y=t13))+ ggtitle(label=gtitle2) + geom_bin2d(show.legend=FALSE) + xlim(c(0,1)) + ylim(c(0,1)) )
   C = (ggplot(data=df,aes(x=t1n2,y=t1n3))+ ggtitle(label=gtitle1) + geom_bin2d(show.legend=FALSE) + xlim(c(0,1)) + ylim(c(0,1)) ) + (ggplot(data=dfP,aes(x=t1n2,y=t1n3))+ ggtitle(label=gtitle2) + geom_bin2d(show.legend=FALSE) + xlim(c(0,1)) + ylim(c(0,1)) )
@@ -259,3 +281,71 @@ make_ggmagic2 = function(df,dfP,gtitle1='Priori',gtitle2='Post'){
   H = (ggplot(data=df,aes(x=t13+tn13,y=..density..))+ ggtitle(label=gtitle1) + geom_histogram(show.legend=FALSE) + xlim(c(0,1)))  + (ggplot(data=dfP,aes(x=t13+tn13,y=..density..))+ ggtitle(label=gtitle2) + geom_histogram(show.legend=FALSE) + xlim(c(0,1)))
   return(list('A'=A,'B'=B,'C'=C,'D'=D,'E'=E,'F'=F,'G'=G,'H'=H))
 }
+
+
+####################################################
+###### ENTROPY
+####################################################
+
+marginalization_matrix = function(scheme2=c('1.2','1.n2','n1.2','n1.n2','1.3','1.n3','n1.3','n1.n3','2.3','2.n3','n2.3','n2.n3'),scheme3=c('1.2.3','1.2.n3','1.n2.3','1.n2.n3','n1.2.3','n1.2.n3','n1.n2.3','n1.n2.n3'),include.full.n=TRUE){
+  if(!include.full.n){
+    scheme2 = scheme2[sapply(scheme2,function(sc2){
+      sc2 = strsplit(sc2,'\\.')[[1]]
+      r = TRUE
+      if(all(grepl('n',sc2))) r = FALSE
+      return(r)
+    })]
+    scheme3 = scheme3[sapply(scheme3,function(sc3){
+      sc3 = strsplit(sc3,'\\.')[[1]]
+      r = TRUE
+      if(all(grepl('n',sc3))) r = FALSE
+      return(r)
+    })]
+  }
+  M = matrix(0,nrow=length(scheme2),ncol=length(scheme3))
+  colnames(M) = scheme3
+  rownames(M) = scheme2
+  sc3 = strsplit(scheme3,'\\.')
+  for(sc2 in scheme2){
+    ies2 = strsplit(sc2,'\\.')[[1]]
+    
+    sc3i = scheme3[which(sapply(sc3,function(ies3) all(is.element(ies2,ies3))))]
+    M[sc2,sc3i] = 1
+  }
+  return(M)
+}
+
+
+gen_thetas_from_params = function(thetaNames,params){
+  thetas = rep(NA,length(thetaNames))
+  names(thetas) = thetaNames
+  for(tN in thetaNames){
+    tn = strsplit(tN,'\\.')[[1]]
+    thetas[tN] = prod(params[which(sapply(names(params),function(pr){
+      pr = strsplit(pr,'\\.')[[1]]
+      all(is.element(pr,tn))
+    }))])/params['alfa']
+  }
+  return(thetas)
+}
+
+costFun = function(params,parms){
+  M = parms[['M']]
+  thetas2 = parms[['thetas2']]
+  thetaNames = colnames(M)
+  thetas = gen_thetas_from_params(thetaNames,params)
+  return(sum(abs(thetas2-M%*%thetas)) + abs(sum(thetas)-1))
+}
+
+max_entropy3to2 = function(M,thetas2){
+  params_nm = c('alfa',rownames(M))
+  params = c(1,rep(1/(1:3),(length(params_nm)-1)/3))
+  names(params) = params_nm
+  thetaNames = colnames(M)
+  params[1] = sum(gen_thetas_from_params(thetaNames,params))
+  costFun(params,parms=list('M'=M,'thetas2'=thetas2))
+  parOpt = optim(par=params,fn=costFun,parms=list('M'=M,'thetas2'=thetas2),control=list('abstol'=1e-5,'maxit'=1e5))$par
+  M%*%gen_thetas_from_params(thetaNames,parOpt)
+  sum(gen_thetas_from_params(thetaNames,parOpt))
+}
+
